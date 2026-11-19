@@ -2,6 +2,8 @@
 
 **by The Disk King** · [thediskking.com/plugins/manager](https://thediskking.com/plugins/manager/)
 
+![MPC Plugins Manager running on an MPC Live III (Dark theme)](docs/screenshot.png)
+
 Install, update, remove and restore free plugins **right on your Akai MPC's screen**. No computer needed.
 
 - **Tested & Working first.** Plugins whose makers tested the current version on *your* kind of MPC (Gen1 or Gen2) are on the first tab. Untested and beta plugins are kept apart, behind a red warning and a second tap.
