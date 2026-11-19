@@ -97,6 +97,7 @@ $('go').onclick=function(){pin=$('pin').value.trim();poll(true);};
 $('pin').onkeyup=function(e){if(e.key==='Enter')$('go').onclick();};
 // Tested counts only when it was tested on this kind of MPC (Gen1 or Gen2), like the model pages on thediskking.com.
 function testedHere(p){return p.tier==='verified'&&(!p.tested||!state||p.tested.split(',').indexOf(state.gen)>=0);}
+function newer(a,b){a=String(a||'').replace(/^v/i,'').split(/[-+]/)[0].split('.');b=String(b||'').replace(/^v/i,'').split(/[-+]/)[0].split('.');for(var i=0;i<Math.max(a.length,b.length);i++){var x=parseInt(a[i]||'0',10)||0,y=parseInt(b[i]||'0',10)||0;if(x!==y)return y>x;}return false;}
 function installedVersion(p){if(!state)return null;var f=p.folders?p.folders.split('|'):[];for(var i=0;i<f.length;i++){if(f[i]&&state.installed.hasOwnProperty(f[i]))return {folder:f[i],version:state.installed[f[i]]};}return null;}
 function act(op,arg,confirmText){if(confirmText&&!confirm(confirmText))return;
  api('/api/do?op='+op+'&arg='+encodeURIComponent(arg),true).then(function(j){if(j.answer!=='OK')alert(j.answer);poll(false);}).catch(function(e){alert(e.error||'Could not reach the MPC');});}
@@ -113,7 +114,7 @@ function card(p){
  var a=el('div','acts');
  var risky=!testedHere(p)?'This plugin has NO recorded hardware test for this version. It may crash your MPC. Install anyway?':null;
  if(iv){
-  if(p.can&&iv.version!==p.version){var u=el('button','up','Update to v'+p.version);u.onclick=function(){act('install',p.id,risky);};a.appendChild(u);}
+  if(p.can&&newer(iv.version,p.version)){var u=el('button','up','Update to v'+p.version);u.onclick=function(){act('install',p.id,risky);};a.appendChild(u);}
   var r=el('button','rm','Remove');r.onclick=function(){act('remove',iv.folder,'Remove '+p.name+'? It goes to Removed Plugins, so you can put it back.');};a.appendChild(r);
  }else if(p.can){var b=el('button','','Install');b.onclick=function(){act('install',p.id,risky);};a.appendChild(b);}
  else a.appendChild(el('span','note','This release must be installed with the maker\'s own installer. See its page on thediskking.com.'));
@@ -131,13 +132,13 @@ function render(){
   plugins.forEach(function(p){
    var iv=installedVersion(p),tested=testedHere(p);
    if(tab==='tested'&&!tested)return; if(tab==='untested'&&tested)return; if(tab==='installed'&&!iv)return;
-   if(tab==='updates'&&!(iv&&p.can&&iv.version!==p.version))return;
+   if(tab==='updates'&&!(iv&&p.can&&newer(iv.version,p.version)))return;
    if(k&&p.kind!==k)return; var so=$('style').value; if(so&&p.style!==so)return;
    if(q&&(p.name+' '+p.maker+' '+(p.about||'')).toLowerCase().indexOf(q)<0)return;
    out.push(card(p));});
  }
  var tools=$('tools');tools.replaceChildren();
- if(tab==='updates'&&out.length){var ua=el('button','go','Update all ('+out.length+')');ua.onclick=function(){if(!confirm('Update all '+out.length+' plugins? Your own files are kept, and old versions go to Removed Plugins.'))return;plugins.forEach(function(p){var iv=installedVersion(p);if(iv&&p.can&&iv.version!==p.version)act('install',p.id,null);});};tools.appendChild(ua);}
+ if(tab==='updates'&&out.length){var ua=el('button','go','Update all ('+out.length+')');ua.onclick=function(){if(!confirm('Update all '+out.length+' plugins? Your own files are kept, and old versions go to Removed Plugins.'))return;plugins.forEach(function(p){var iv=installedVersion(p);if(iv&&p.can&&newer(iv.version,p.version))act('install',p.id,null);});};tools.appendChild(ua);}
  if(tab==='tested'||tab==='untested'){var sp=el('button',null,picking?'Done selecting':'Select several');sp.onclick=function(){picking=!picking;if(!picking)picked={};selbar();render();};tools.appendChild(sp);}
  box.replaceChildren.apply(box,out.length?out:[el('div','empty',tab==='updates'?'Everything is up to date.':'Nothing here.')]);
 }

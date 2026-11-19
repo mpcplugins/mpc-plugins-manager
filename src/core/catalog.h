@@ -17,7 +17,9 @@ struct Build
 struct Entry
 {
     std::string id, name, maker, kind, tier, version, testedOn, userFiles, summary, style, screenshot, updated;
+    std::string notes, history, needs;          // newest release notes, 'ver|date|downloads;...', what it needs
     long long downloads = 0;
+    int featured = 0;                          // 1, 2, 3...: hand-picked by The Disk King, shown first
     Build sdk, gen1, gen2;
 
     bool tested() const { return tier == "verified"; }
@@ -43,6 +45,32 @@ struct Entry
         return out;
     }
 };
+
+// Compares versions number by number: "1.10.0" is newer than "1.9.2", "2.0" equals "2.0.0". -1, 0 or 1.
+// Text after a dash ("1.2.0-beta1") makes it older than the same plain number.
+inline int compareVersions(const std::string& a, const std::string& b)
+{
+    size_t i = 0, j = 0;
+    auto skipV = [](const std::string& s, size_t& k) { if (k < s.size() && (s[k] == 'v' || s[k] == 'V')) ++k; };
+    skipV(a, i); skipV(b, j);
+    while (i < a.size() || j < b.size())
+    {
+        if ((i < a.size() && a[i] == '-') || (j < b.size() && b[j] == '-'))
+        {
+            bool da = i < a.size() && a[i] == '-', db = j < b.size() && b[j] == '-';
+            return da == db ? 0 : (da ? -1 : 1);
+        }
+        long long x = 0, y = 0;
+        while (i < a.size() && a[i] >= '0' && a[i] <= '9') x = x * 10 + (a[i++] - '0');
+        while (j < b.size() && b[j] >= '0' && b[j] <= '9') y = y * 10 + (b[j++] - '0');
+        if (x != y) return x < y ? -1 : 1;
+        if (i < a.size() && a[i] == '.') ++i;
+        if (j < b.size() && b[j] == '.') ++j;
+        if (i < a.size() && a[i] != '-' && !(a[i] >= '0' && a[i] <= '9')) ++i;   // ignore anything else
+        if (j < b.size() && b[j] != '-' && !(b[j] >= '0' && b[j] <= '9')) ++j;
+    }
+    return 0;
+}
 
 inline std::vector<std::string> splitTabs(const std::string& line)
 {
@@ -97,8 +125,10 @@ inline bool parseCatalog(const std::string& text, std::vector<Entry>& out, std::
         e.id = get("id"); e.name = get("name"); e.maker = get("maker"); e.kind = get("kind"); e.tier = get("tier");
         e.version = get("version"); e.testedOn = get("tested_on"); e.userFiles = get("user_files"); e.summary = get("summary");
         e.style = get("style"); e.updated = get("updated"); e.screenshot = get("screenshot");
+        e.notes = get("notes"); e.history = get("history"); e.needs = get("needs");
         if (e.screenshot.rfind("https://", 0) != 0) e.screenshot.clear();
         e.downloads = num("downloads");
+        e.featured = (int)num("featured");
         auto build = [&](const std::string& k, Build& b) {
             b.url = get((k + "_url").c_str()); b.sha256 = get((k + "_sha256").c_str());
             b.folder = get((k + "_folder").c_str()); b.inside = get((k + "_inside").c_str());
