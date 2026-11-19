@@ -7,13 +7,15 @@
 Install, update, remove and restore free plugins **right on your Akai MPC's screen**. No computer needed.
 
 - **Tested & Working first.** Plugins whose makers tested the current version on *your* kind of MPC (Gen1 or Gen2) are on the first tab. Untested and beta plugins are kept apart, behind a red warning and a second tap.
-- **Screenshots, badges and versions** on every card, 5 plugins per page. Turn pages with the arrows or Q-Link 1.
+- **Big cards** with a screenshot, description, downloads, size, badge, version and tested status. **Roll your finger to scroll**; pages of 20, arrows for the next 20, Q-Link 1 too.
+- **Tap a plugin's picture for its details page:** big screenshot, full description, what's new, version history, what it needs, and the install button always there.
+- **Featured picks first**, then plugins with real pictures.
 - **One button per plugin** that does the right thing: INSTALL, UPDATE, REMOVE or RESTORE.
 - **UPDATE ALL** in one tap. Your own files (ROMs, presets, patterns) are kept on every update.
 - **Undo anything.** REMOVE moves a plugin to a *Removed Plugins* folder; RESTORE puts it back.
 - **Checked downloads.** Every file comes straight from its maker's GitHub over HTTPS and must match its SHA-256 checksum before anything is copied.
 - **Works with more plugins.** Releases made before MPC OS 3.10.1 that lack a `plugin.json` are installed too: the manager writes the `plugin.json` from the release's own details.
-- **10 color themes.** Disk King (default), Light, Dark, Midnight, MPC Red, Studio Green, Ocean, Purple Haze, Sunset, High Contrast.
+- **10 color themes that change live.** Disk King (default), Light, Dark, Midnight, MPC Red, Studio Green, Ocean, Purple Haze, Sunset, High Contrast. Tap THEME and the screen switches at once.
 - **Optional phone page.** Browse from a phone or computer on the same Wi-Fi, protected by a 4-digit PIN shown on the MPC.
 - **Only touches what it should.** It writes inside `VST2 Plugins`, its own `MPC Plugins Manager` folder, and its own screen files. No system changes.
 
