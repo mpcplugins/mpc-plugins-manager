@@ -1,0 +1,6 @@
+build/
+dist/
+skins/
+Content/
+tests/*.exe
+__pycache__/

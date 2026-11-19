@@ -1,0 +1,17 @@
+{
+    "name":  "MPC Plugins Manager",
+    "manufacturer":  "The Disk King",
+    "version":  "1.0.0",
+    "format":  "vst2",
+    "kind":  "instrument",
+    "uid":  "TDKM",
+    "numInputs":  0,
+    "numOutputs":  2,
+    "category":  "Utility",
+    "file32":  "VST/mpc-plugins-manager-arm32.so",
+    "file64":  "VST/mpc-plugins-manager-arm64.so",
+    "description":  "MPC Plugins Manager by The Disk King: install, update, remove and restore free MPC plugins from the MPC or your phone. Tested \u0026 Working first, PIN protected, checksum checked.",
+    "author":  "The Disk King",
+    "url":  "https://thediskking.com/plugins/manager/",
+    "license":  "All rights reserved"
+}
