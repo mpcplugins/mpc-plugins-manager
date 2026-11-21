@@ -2,7 +2,7 @@
 
 **by The Disk King** · [thediskking.com/plugins/manager](https://thediskking.com/plugins/manager/)
 
-![MPC Plugins Manager running on an MPC Live III (Dark theme)](docs/screenshot.png)
+![MPC Plugins Manager by The Disk King](docs/screenshot.png)
 
 Install, update, remove and restore free plugins **right on your Akai MPC's screen**. No computer needed.
 
@@ -22,6 +22,8 @@ Install, update, remove and restore free plugins **right on your Akai MPC's scre
 - **10 color themes that change live.** Disk King (default), Light, Dark, Midnight, MPC Red, Studio Green, Ocean, Purple Haze, Sunset, High Contrast. Tap THEME and the screen switches at once.
 - **Optional phone page.** Browse from a phone or computer on the same Wi-Fi, protected by a 4-digit PIN shown on the MPC.
 - **Only touches what it should.** It writes inside `VST2 Plugins`, its own `MPC Plugins Manager` folder, and its own screen files. No system changes.
+
+![MPC Plugins Manager running on an MPC Live III (Dark theme)](docs/screen-main.png)
 
 The plugin list is the one at [thediskking.com/plugins](https://thediskking.com/plugins/), checked every night.
 
