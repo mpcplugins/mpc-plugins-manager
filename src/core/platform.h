@@ -102,8 +102,37 @@ public:
         return true;
     }
 
+    // Sends a small form (a rating) over HTTPS. Only ever called after the person taps something.
+    bool post(const std::string& url, const std::string& body, std::string& error)
+    {
+        if (!ready()) { error = "no download library"; return false; }
+        void* h = init_();
+        if (!h) { error = "could not start"; return false; }
+        char errbuf[256] = {0};
+        Sink sink{nullptr, 0, 65536, nullptr, false};
+        setopt_(h, 10002, url.c_str());                 // CURLOPT_URL
+        setopt_(h, 47, 1L);                             // CURLOPT_POST
+        setopt_(h, 10015, body.c_str());                // CURLOPT_POSTFIELDS
+        setopt_(h, 20011, &Curl::discard);              // CURLOPT_WRITEFUNCTION: the answer is not needed
+        setopt_(h, 10001, &sink);
+        setopt_(h, 45, 1L); setopt_(h, 99, 1L); setopt_(h, 78, 15L); setopt_(h, 13, 30L);   // FAILONERROR, NOSIGNAL, timeouts
+        setopt_(h, 181, 2L); setopt_(h, 182, 2L);       // HTTPS only
+        setopt_(h, 10018, "MPCPluginsManager/1.2 (The Disk King)");
+        setopt_(h, 10010, errbuf);
+        for (const char* ca : {"/etc/ssl/certs/ca-certificates.crt", "/etc/pki/tls/certs/ca-bundle.crt", "/etc/ssl/cert.pem"})
+        {
+            struct stat st;
+            if (stat(ca, &st) == 0) { setopt_(h, 10065, ca); break; }
+        }
+        int rc = perform_(h);
+        cleanup_(h);
+        if (rc != 0) { error = errbuf[0] ? errbuf : "could not send"; return false; }
+        return true;
+    }
+
 private:
     struct Sink { FILE* f; long long got, max; std::function<bool(long long)> progress; bool cancelled; };
+    static size_t discard(char*, size_t size, size_t n, void*) { return size * n; }
 
     static size_t write(char* p, size_t size, size_t n, void* user)
     {
@@ -143,9 +172,16 @@ inline bool downloadFile(const std::string& url, const std::string& path, std::s
     return Curl::get().download(url, path, error, progress);
 }
 
+inline bool postForm(const std::string& url, const std::string& body, std::string& error)
+{
+    return Curl::get().post(url, body, error);
+}
+
 #else   // ---------- test computer: no network; file:// copies a local file so the install steps can be tested
 
 inline std::string lanAddress() { return "127.0.0.1"; }
+
+inline bool postForm(const std::string&, const std::string&, std::string& error) { error = "only on the MPC"; return false; }
 
 inline bool downloadFile(const std::string& url, const std::string& path, std::string& error,
                          const std::function<bool(long long)>& progress = nullptr)

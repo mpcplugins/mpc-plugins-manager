@@ -117,6 +117,7 @@ struct Snapshot   // a consistent copy of the state, for the screen and the phon
     std::vector<std::string> removed;               // folder names in Removed Plugins
     std::vector<Drive> drives;
     int queued = 0;
+    std::map<std::string, int> myRatings;           // plugin id -> the stars this MPC gave
 };
 
 class Manager
@@ -148,7 +149,8 @@ public:
     // Requests from the screen or the phone page. Each returns a short answer for the person.
     std::string request(const std::string& op, const std::string& arg)
     {
-        if (op != "install" && op != "remove" && op != "restore" && op != "refresh" && op != "drive" && op != "cancel")
+        if (op != "install" && op != "remove" && op != "restore" && op != "refresh" && op != "drive" && op != "cancel"
+            && op != "rate" && op != "reason")
             return "unknown request";
         if (op == "cancel") { cancel_ = true; return "Stopping the current download"; }
         std::lock_guard<std::mutex> g(jobsMu_);
@@ -501,9 +503,74 @@ private:
         fail("Change drive", "that drive is not available");
     }
 
+    // ---------------------------------------------------------------- ratings (sent only after a tap)
+    // This MPC's anonymous voter code: random, made once, kept in the manager's folder. No name, no account.
+    std::string voter()
+    {
+        std::string v = readText(work_ / "voter.txt");
+        while (!v.empty() && (v.back() == '\n' || v.back() == '\r')) v.pop_back();
+        bool ok = v.size() == 32;
+        for (char c : v) if (!std::isxdigit((unsigned char)c)) ok = false;
+        if (ok) return v;
+        std::random_device rd;
+        static const char* hx = "0123456789abcdef";
+        v.clear();
+        for (int i = 0; i < 32; ++i) v += hx[rd() % 16];
+        std::error_code ec;
+        fs::create_directories(work_, ec);
+        std::ofstream(work_ / "voter.txt") << v << "\n";
+        return v;
+    }
+
+    void loadMyRatings()
+    {
+        std::map<std::string, int> m;
+        std::istringstream in(readText(work_ / "my-ratings.txt"));
+        std::string id; int s;
+        while (in >> id >> s) if (s >= 1 && s <= 5) m[id] = s;
+        std::lock_guard<std::mutex> g(mu_);
+        state_.myRatings = m;
+    }
+
+    // arg: "<plugin id>|<stars 1-5>" for a rating, "<plugin id>|<reason>" for why it was removed
+    void sendFeedback(const std::string& kind, const std::string& arg)
+    {
+        size_t bar = arg.find('|');
+        if (bar == std::string::npos) return;
+        std::string id = arg.substr(0, bar), value = arg.substr(bar + 1);
+        for (char c : id) if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-')) return;
+        std::string body = "plugin=" + id + "&voter=" + voter() + "&source=mpc";
+        if (kind == "rate")
+        {
+            int s = std::atoi(value.c_str());
+            if (s < 1 || s > 5) return;
+            body += "&stars=" + std::to_string(s);
+        }
+        else
+        {
+            if (value != "didnt-work" && value != "crashed" && value != "not-needed" && value != "other") return;
+            body += "&reason=" + value;
+        }
+        std::string err;
+        bool ok = postForm(std::string("https://thediskking.com/plugins/api/") + kind, body, err);
+        if (!ok) { setStatus("Could not send it", err); return; }
+        if (kind == "rate")
+        {
+            {
+                std::lock_guard<std::mutex> g(mu_);
+                state_.myRatings[id] = std::atoi(value.c_str());
+            }
+            std::ofstream f(work_ / "my-ratings.txt");
+            std::lock_guard<std::mutex> g(mu_);
+            for (auto& kv : state_.myRatings) f << kv.first << " " << kv.second << "\n";
+        }
+        setStatus(kind == "rate" ? "Thanks for rating!" : "Thanks for telling us");
+    }
+
     // ---------------------------------------------------------------- the worker
     void loop()
     {
+        loadMyRatings();
         {   // the saved list first, so the page works at once (and without internet)
             std::ifstream f(work_ / "catalog.tsv", std::ios::binary);
             if (f) { std::stringstream ss; ss << f.rdbuf(); loadCatalogText(ss.str(), false); }
@@ -533,6 +600,7 @@ private:
             else if (job.first == "restore") restore(job.second);
             else if (job.first == "refresh") { refreshCatalog(); scanInstalled(); }
             else if (job.first == "drive") switchDrive(job.second);
+            else if (job.first == "rate" || job.first == "reason") sendFeedback(job.first, job.second);
             { std::lock_guard<std::mutex> g(mu_); state_.busy = false; state_.current.clear(); ++changes_; }
         }
     }

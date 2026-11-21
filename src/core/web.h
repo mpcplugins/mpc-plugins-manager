@@ -111,7 +111,7 @@ inline std::string stateJson(Manager& m, bool list)
                + ",\"tested\":" + q(e.testedOn) + ",\"dl\":" + std::to_string(e.downloads) + ",\"own\":" + q(e.userFiles)
                + ",\"about\":" + q(e.summary) + ",\"folders\":" + q(folders) + ",\"can\":" + (b ? "true" : "false")
                + ",\"folder\":" + q(b ? b->folder : "") + ",\"style\":" + q(e.style) + ",\"shot\":" + q(e.screenshot)
-               + ",\"date\":" + q(e.updated) + "}";
+               + ",\"date\":" + q(e.updated) + ",\"both\":" + (e.universal() ? "true" : "false") + "}";
             first = false;
         }
         o += "]";

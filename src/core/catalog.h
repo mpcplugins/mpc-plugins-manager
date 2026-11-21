@@ -20,9 +20,12 @@ struct Entry
     std::string notes, history, needs;          // newest release notes, 'ver|date|downloads;...', what it needs
     long long downloads = 0;
     int featured = 0;                          // 1, 2, 3...: hand-picked by The Disk King, shown first
+    double rating = 0; int ratingCount = 0;    // users' star rating (from thediskking.com)
     Build sdk, gen1, gen2;
 
     bool tested() const { return tier == "verified"; }
+    // One download for every MPC (made with the MPC Plugin SDK: 32-bit Gen1 and 64-bit Gen2 code in one folder).
+    bool universal() const { return sdk.copyOk && !sdk.url.empty(); }
     bool beta() const { return tier == "experimental"; }
 
     // The download to use on this MPC: one that already has plugin.json first (works-on-both, then our
@@ -129,6 +132,8 @@ inline bool parseCatalog(const std::string& text, std::vector<Entry>& out, std::
         if (e.screenshot.rfind("https://", 0) != 0) e.screenshot.clear();
         e.downloads = num("downloads");
         e.featured = (int)num("featured");
+        e.ratingCount = (int)num("rating_count");
+        { std::string r = get("rating"); e.rating = r.empty() ? 0 : std::atof(r.c_str()); }
         auto build = [&](const std::string& k, Build& b) {
             b.url = get((k + "_url").c_str()); b.sha256 = get((k + "_sha256").c_str());
             b.folder = get((k + "_folder").c_str()); b.inside = get((k + "_inside").c_str());

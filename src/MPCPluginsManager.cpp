@@ -80,7 +80,7 @@ struct Item
 {
     std::string id, folder, name, maker, meta, version, tested, about, stats, notes, history, needs;
     int action = aBlank, badge = bBlank, chip = chNone, thumb = 0;
-    bool testedHere = false, installed = false, update = false, canInstall = false;
+    bool testedHere = false, builtBoth = false, installed = false, update = false, canInstall = false;
     long long downloads = 0;
     int featured = 0;
     std::string date;
@@ -165,7 +165,7 @@ private:
         info.name         = "MPC Plugins Manager";
         info.vendor       = "The Disk King";
         info.uniqueId     = MPC_FOURCC('T', 'D', 'K', 'M');   // must match plugin.json "uid": "TDKM"
-        info.version      = 1100;
+        info.version      = 1200;
         info.isInstrument = true;
         info.numInputs    = 0;
         info.numOutputs   = 2;
@@ -412,6 +412,8 @@ private:
             Item it;
             it.id = e.id; it.name = e.name; it.downloads = e.downloads; it.date = e.updated; it.featured = e.featured;
             it.testedHere = e.tested() && (e.testedOn.empty() || e.testedOn.find(gen2 ? "gen2" : "gen1") != std::string::npos);
+            // Tested on the other kind of MPC and built as one download for both: shown with the tested plugins, marked as such.
+            it.builtBoth = !it.testedHere && e.tested() && e.universal();
             std::string have;
             for (const std::string& f : e.folders())
             {
@@ -425,6 +427,7 @@ private:
             it.badge = it.installed ? bInstalled : e.beta() ? bBeta : e.tested() ? bStable : bUntested;
             it.chip = it.testedHere ? chTested : e.tested() ? chOther : chNone;
             it.tested = it.testedHere ? "Tested on your MPC (" + std::string(gen2 ? "Gen2" : "Gen1") + ")"
+                      : it.builtBoth ? "Tested on " + std::string(gen2 ? "Gen1" : "Gen2") + ", built for " + std::string(gen2 ? "Gen2" : "Gen1")
                       : e.tested() ? "Tested on " + std::string(gen2 ? "Gen1" : "Gen2") + " only" : "";
             it.version = it.update ? "v" + have + " > v" + e.version : "v" + e.version;
             std::string kind = e.kind.empty() ? "plugin" : e.kind;
@@ -442,7 +445,7 @@ private:
             bool typeOk = type_ == 0 || (type_ == 1 && e.kind == "instrument") || (type_ == 2 && e.kind == "effect") || (type_ == 3 && e.kind == "addin");
             all.push_back(it);
             if (!typeOk) continue;
-            if ((view == 0 && it.testedHere) || (view == 1 && !it.testedHere) || (view == 2 && it.installed) || (view == 3 && it.update))
+            if ((view == 0 && (it.testedHere || it.builtBoth)) || (view == 1 && !it.testedHere && !it.builtBoth) || (view == 2 && it.installed) || (view == 3 && it.update))
                 shown.push_back(it);
         }
         if (view == 2)                                       // installed folders that are not on the list

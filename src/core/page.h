@@ -97,13 +97,14 @@ $('go').onclick=function(){pin=$('pin').value.trim();poll(true);};
 $('pin').onkeyup=function(e){if(e.key==='Enter')$('go').onclick();};
 // Tested counts only when it was tested on this kind of MPC (Gen1 or Gen2), like the model pages on thediskking.com.
 function testedHere(p){return p.tier==='verified'&&(!p.tested||!state||p.tested.split(',').indexOf(state.gen)>=0);}
+function builtBoth(p){return !testedHere(p)&&p.tier==='verified'&&p.both;}
 function newer(a,b){a=String(a||'').replace(/^v/i,'').split(/[-+]/)[0].split('.');b=String(b||'').replace(/^v/i,'').split(/[-+]/)[0].split('.');for(var i=0;i<Math.max(a.length,b.length);i++){var x=parseInt(a[i]||'0',10)||0,y=parseInt(b[i]||'0',10)||0;if(x!==y)return y>x;}return false;}
 function installedVersion(p){if(!state)return null;var f=p.folders?p.folders.split('|'):[];for(var i=0;i<f.length;i++){if(f[i]&&state.installed.hasOwnProperty(f[i]))return {folder:f[i],version:state.installed[f[i]]};}return null;}
 function act(op,arg,confirmText){if(confirmText&&!confirm(confirmText))return;
  api('/api/do?op='+op+'&arg='+encodeURIComponent(arg),true).then(function(j){if(j.answer!=='OK')alert(j.answer);poll(false);}).catch(function(e){alert(e.error||'Could not reach the MPC');});}
 function card(p){
  var c=el('div','card');var iv=installedVersion(p);
- var st=testedHere(p)?['t-ok','✓ Tested & working on '+(state&&state.gen==='gen2'?'Gen2':'Gen1')]:p.tier==='verified'?['t-un','Tested on '+String(p.tested).replace(/gen/g,'Gen')+' only, not on your MPC']:p.tier==='experimental'?['t-beta','⚠ Beta / unfinished']:['t-un','Not yet tested'];
+ var st=testedHere(p)?['t-ok','✓ Tested & working on '+(state&&state.gen==='gen2'?'Gen2':'Gen1')]:builtBoth(p)?['t-un','Tested on '+String(p.tested).replace(/gen/g,'Gen')+', built for your MPC']:p.tier==='verified'?['t-un','Tested on '+String(p.tested).replace(/gen/g,'Gen')+' only, not on your MPC']:p.tier==='experimental'?['t-beta','⚠ Beta / unfinished']:['t-un','Not yet tested'];
  c.appendChild(el('span','strip '+st[0],st[1]));
  c.appendChild(el('div','name',p.name));
  c.appendChild(el('div','meta','by '+p.maker+' · '+(p.kind||'plugin')+' · v'+p.version+(iv?' · installed v'+(iv.version||'?'):'')));
@@ -131,7 +132,7 @@ function render(){
  }else{
   plugins.forEach(function(p){
    var iv=installedVersion(p),tested=testedHere(p);
-   if(tab==='tested'&&!tested)return; if(tab==='untested'&&tested)return; if(tab==='installed'&&!iv)return;
+   var both=builtBoth(p); if(tab==='tested'&&!tested&&!both)return; if(tab==='untested'&&(tested||both))return; if(tab==='installed'&&!iv)return;
    if(tab==='updates'&&!(iv&&p.can&&newer(iv.version,p.version)))return;
    if(k&&p.kind!==k)return; var so=$('style').value; if(so&&p.style!==so)return;
    if(q&&(p.name+' '+p.maker+' '+(p.about||'')).toLowerCase().indexOf(q)<0)return;

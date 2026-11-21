@@ -2,6 +2,12 @@
 
 All notable changes to MPC Plugins Manager by The Disk King.
 
+## 1.2.0 (2026-11-21)
+
+- **Gen1 owners see more plugins in the main list.** A plugin tested on Gen2 that comes as one download for every MPC
+  (made with the MPC Plugin SDK) is now shown with the tested plugins on a Gen1 too, marked "Tested on Gen2, built for
+  Gen1", instead of on the red Untested tab. The same the other way round. Installing it still asks for a second tap.
+
 ## 1.1.0 (2026-11-19)
 
 **Bigger, clearer, and a details page for every plugin.**

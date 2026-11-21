@@ -6,9 +6,9 @@
 
 Install, update, remove and restore free plugins **right on your Akai MPC's screen**. No computer needed.
 
-[![Download MPC Plugins Manager 1.1.0](docs/download-button.png)](https://github.com/mpcplugins/mpc-plugins-manager/releases/download/v1.1.0/MPC-Plugins-Manager-1.1.0-mpc-sdk.zip)
+[![Download MPC Plugins Manager 1.2.0](docs/download-button.png)](https://github.com/mpcplugins/mpc-plugins-manager/releases/download/v1.2.0/MPC-Plugins-Manager-1.2.0-mpc-sdk.zip)
 
-**Version 1.1.0** · works on every MPC (Gen1 and Gen2) · step-by-step install below.
+**Version 1.2.0** · works on every MPC (Gen1 and Gen2) · step-by-step install below.
 
 - **Tested & Working first.** Plugins whose makers tested the current version on *your* kind of MPC (Gen1 or Gen2) are on the first tab. Untested and beta plugins are kept apart, behind a red warning and a second tap.
 - **Big cards** with a screenshot, description, downloads, size, badge, version and tested status. **Roll your finger to scroll**; pages of 20, arrows for the next 20, Q-Link 1 too.
@@ -28,7 +28,7 @@ The plugin list is the one at [thediskking.com/plugins](https://thediskking.com/
 ## Install
 
 1. Your MPC needs **MPC OS 3.10.1 or later**. Turn on **Menu → Preferences → Enhancements → Enable Enhancements** and **External Plugin Support**, wait a few seconds, then restart.
-2. Click the **DOWNLOAD** button at the top of this page. A file called `MPC-Plugins-Manager-1.1.0-mpc-sdk.zip` lands in your **Downloads** folder (older versions: [Releases](../../releases)).
+2. Click the **DOWNLOAD** button at the top of this page. A file called `MPC-Plugins-Manager-1.2.0-mpc-sdk.zip` lands in your **Downloads** folder (older versions: [Releases](../../releases)).
 3. Unzip it (Windows: right-click the file, then **Extract All**; Mac: double-click it). Connect the MPC to the computer with its USB cable in **Computer Mode** and copy the folder **`The Disk King - VST - MPC Plugins Manager`** into a folder named **`VST2 Plugins`** on the MPC's internal drive or a USB stick. Restart the MPC.
 4. Add a **Plugin** track, choose **External Plugins → The Disk King → MPC Plugins Manager**, then tap the **arrow** next to the plugin name to open its screen.
 
