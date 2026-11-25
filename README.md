@@ -14,7 +14,7 @@ Install, update, remove and restore free plugins **right on your Akai MPC's scre
 - **Big cards** with a screenshot, description, downloads, size, badge, version and tested status. **Roll your finger to scroll**; pages of 20, arrows for the next 20, Q-Link 1 too.
 - **Tap a plugin's picture for its details page:** big screenshot, full description, what's new, version history, what it needs, and the install button always there.
 - **Follow your favorite makers.** Tap **FOLLOW MAKER** on a plugin's details page (or **Follow maker** on the phone page): their new plugins and new versions then come first in the list, marked **NEW**, until you open or install them. TYPE > Followed shows everything from the makers you follow.
-- **Maker pages.** Tap a maker's name for everything by that maker in one scrollable list (on the MPC and on the phone page).
+- **More from the same maker.** Roll your finger up on a plugin's page and it scrolls down into everything else by that maker (on the phone page, tap the maker's name).
 - **Featured picks first**, then plugins with real pictures.
 - **One button per plugin** that does the right thing: INSTALL, UPDATE, REMOVE or RESTORE.
 - **UPDATE ALL** in one tap. Your own files (ROMs, presets, patterns) are kept on every update.

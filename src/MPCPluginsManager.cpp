@@ -70,7 +70,15 @@ constexpr int kFavLook = kFavTap + 1;            // picture: 0 FOLLOW, 1 FOLLOWI
 // added in 1.5: tap a maker's name (details page, or a card) for everything by that maker
 constexpr int kMakerTap = kFavLook + 1;          // the details page's maker name
 constexpr int kMakerTap1 = kMakerTap + 1;        // the cards' maker names (1..3)
-constexpr int kNumParams = kMakerTap1 + kCards;
+// added in 1.5: roll a finger up on a plugin's page to scroll down into everything else by its maker
+constexpr int kMoreTiles = 8;                    // two rows of four
+constexpr int kDScroll = kMakerTap1 + kCards;    // the page's finger scroll, 0 = the top
+constexpr int kDMore = kDScroll + 1;             // 0 = the top of the page, 1 = scrolled into MORE FROM
+constexpr int kMoreTitle = kDMore + 1;           // text: "MORE FROM <maker>"
+constexpr int kMoreHint = kMoreTitle + 1;        // text: "6 more from <maker>: roll up" / "Roll down: back to the top"
+constexpr int kMTile = kMoreHint + 1;            // per tile: Thumb, Thumb Bank, Name
+constexpr int kMOpen = kMTile + 3 * kMoreTiles;  // per tile: tap to open it
+constexpr int kNumParams = kMOpen + kMoreTiles;
 // must match THEME_ORDER in make_skin.py
 const char* const kThemes[] = {"Disk King", "Light", "Dark", "Midnight", "MPC Red", "Studio Green", "Ocean", "Purple Haze", "Sunset", "High Contrast"};
 constexpr int kNumThemes = 10;
@@ -132,6 +140,13 @@ public:
         addText("Fav Look");
         addParam(mpc::boolParam("makertap", "Maker Tap", false));
         for (int c = 1; c <= kCards; ++c) { std::string id = "makertap" + std::to_string(c), n = "Maker Tap " + std::to_string(c); addParam(mpc::boolParam(id.c_str(), n.c_str(), false)); }
+        addParam(mpc::floatParam("dscroll", "Detail Scroll", 0.0f, 1.0f, 0.0f, "", 2));
+        addParam(mpc::boolParam("detailmore", "Detail More", false));
+        addText("More Title");
+        addText("More Hint");
+        for (int t = 1; t <= kMoreTiles; ++t)
+            for (const char* f : {"M Thumb", "M Thumb Bank", "M Name"}) addText((std::string(f) + " " + std::to_string(t)).c_str());
+        for (int t = 1; t <= kMoreTiles; ++t) { std::string id = "mopen" + std::to_string(t), n = "M Open " + std::to_string(t); addParam(mpc::boolParam(id.c_str(), n.c_str(), false)); }
         text_.assign(kNumParams, std::string());
         text_[kStatus] = "Starting...";
         text_[card(0, cName)] = "MPC Plugins Manager";
@@ -158,6 +173,8 @@ public:
         bool on = plainValue >= 0.5f;
         if ((index >= kPrev && index <= kUpdateAll) || isAction(index) || index == kBack || index == kDetailAction || index == kFavTap || (index >= kMakerTap && index < kMakerTap1 + kCards) || (index >= kOpen1 && index < kOpen1 + kCards))
         { if (on) pressed_.fetch_or(bit(index)); return; }
+        if (index >= kMOpen && index < kMOpen + kMoreTiles) { if (on) pressed2_.fetch_or(1u << (index - kMOpen)); return; }
+        if (index == kDScroll) { scrollDirty_ = true; return; }   // the page scroll: a light update only (see watch())
         if (index == kShow || index == kScroll || index == kThemePick) dirty_ = true;
     }
 
@@ -165,7 +182,8 @@ public:
     {
         if (index == kShow) { static const char* v[] = {"Tested", "Untested", "Installed", "Updates", "Removed"}; int i = (int)plainValue; out = v[i < 0 ? 0 : i > 4 ? 4 : i]; return true; }
         if (index == kThemePick) { int i = (int)plainValue; out = kThemes[i < 0 ? 0 : i >= kNumThemes ? kNumThemes - 1 : i]; return true; }
-        if (index < kStatus || isAction(index) || (index >= kThemePick && index < kDText) || index >= kFavTap) return false;
+        bool moreText = index == kMoreTitle || index == kMoreHint || (index >= kMTile && index < kMOpen && (index - kMTile) % 3 == 2);
+        if (!moreText && (index < kStatus || isAction(index) || (index >= kThemePick && index < kDText) || index >= kFavTap)) return false;
         std::lock_guard<std::mutex> g(textMu_);
         out = text_[(size_t)index];
         return true;
@@ -236,14 +254,25 @@ private:
         {
             unsigned long long presses = pressed_.exchange(0);
             if (presses) handlePresses(presses);
+            unsigned more = pressed2_.exchange(0);
+            if (more) handleMore(more);
             unsigned now = manager_->changeCount();
-            if (presses || dirty_.exchange(false) || now != seen || clock() - lastSlow > 5.0)
+            if (presses || more || dirty_.exchange(false) || now != seen || clock() - lastSlow > 5.0)
             {
                 seen = now;
                 lastSlow = clock();
+                scrollDirty_ = false;
                 rebuild();
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(120));
+            else if (scrollDirty_.exchange(false))       // rolling a finger on a plugin's page: only its MORE FROM part
+            {
+                std::vector<std::pair<int, std::string>> texts;
+                std::vector<std::pair<int, float>> frames;
+                moreFrames(texts, frames);
+                publish(texts, frames, true);
+            }
+            // short naps so a finger roll answers at once (the work above only runs when something changed)
+            std::this_thread::sleep_for(std::chrono::milliseconds(15));
         }
 #endif
     }
@@ -385,6 +414,8 @@ private:
             if (i >= list_.size()) continue;
             detailKey_ = list_[i].id.empty() ? list_[i].folder : list_[i].id;
             if (list_[i].fresh) markSeen(list_[i].id, list_[i].latest);   // opened: no longer NEW
+            setNormalised(kDScroll, 0.0f);               // a page opens at its top
+            notifyHostParameterChanged(kDScroll);
             set(kDetailOpen, 1.0f);
             notifyHostParameterChanged(kDetailOpen);
         }
@@ -418,6 +449,52 @@ private:
                 it = list_[i];
             }
             doAction(it);
+        }
+        dirty_ = true;
+    }
+
+    // The MORE FROM part of a plugin's page, from the cache rebuild() keeps. Roll a finger up on the page: each step
+    // moves one row of 4 (two rows show at a time); step 0 is the top of the page.
+    void moreFrames(std::vector<std::pair<int, std::string>>& texts, std::vector<std::pair<int, float>>& frames)
+    {
+        auto frame = [&](int param, int f, int count) { frames.emplace_back(param, (f + 0.5f) / (float)count); };
+        const int n = (int)more_.size(), rowsN = (n + 3) / 4;
+        const int steps = n ? std::max(1, rowsN - 1) : 0;    // the last step still shows two full rows
+        const int pos = (int)std::lround(std::max(0.0f, std::min(1.0f, get(kDScroll))) * steps);
+        const bool moreView = moreFound_ && n > 0 && pos >= 1;
+        if (getBool(kDMore) != moreView) { set(kDMore, moreView ? 1.0f : 0.0f); notifyHostParameterChanged(kDMore); }
+        moreIds_.assign(kMoreTiles, std::string());
+        const int start = moreView ? (pos - 1) * 4 : 0;
+        for (int t = 0; t < kMoreTiles; ++t)
+        {
+            const int k = start + t;
+            const MoreTile* x = (moreView && k < n) ? &more_[(size_t)k] : nullptr;
+            int gt = x ? x->thumb : 0, bk = gt > thumbHalf_ ? 1 : 0;
+            frame(kMTile + 3 * t + 1, bk, 2);
+            frame(kMTile + 3 * t, gt == 0 ? 0 : (bk ? gt - thumbHalf_ : gt), thumbHalf_ + 1);
+            texts.emplace_back(kMTile + 3 * t + 2, x ? x->name : "");
+            if (x) moreIds_[(size_t)t] = x->id;
+        }
+        texts.emplace_back(kMoreTitle, moreView ? ("MORE FROM " + moreMaker_).substr(0, kMaxText) : "");
+        texts.emplace_back(kMoreHint, (!moreFound_ || n == 0) ? "" : moreView ? "Roll down: back to the top"
+                                      : (std::to_string(n) + " more from " + moreMaker_ + ": roll up").substr(0, kMaxText));
+    }
+
+    // A tile in MORE FROM: open that plugin's page (at its top).
+    void handleMore(unsigned more)
+    {
+        for (int t = 0; t < kMoreTiles; ++t)
+        {
+            if (!(more & (1u << t))) continue;
+            release(kMOpen + t);
+            if (!getBool(kDetailOpen) || t >= (int)moreIds_.size() || moreIds_[(size_t)t].empty()) continue;
+            detailKey_ = moreIds_[(size_t)t];
+            setNormalised(kDScroll, 0.0f);
+            notifyHostParameterChanged(kDScroll);
+            Item it;
+            bool found = false;
+            { std::lock_guard<std::mutex> g(listMu_); found = findItem(detailKey_, it); }
+            if (found && it.fresh) markSeen(it.id, it.latest);
         }
         dirty_ = true;
     }
@@ -636,6 +713,19 @@ private:
             frame(kDPic + pChip, found ? it.chip : chNone, kChipFrames);
             frame(kDPic + pLook, found ? it.action : aBlank, kActionFrames);
             frame(kFavLook, found && fw.makers.count(it.makerName) ? 1 : 0, 2);
+            // ---- MORE FROM the same maker: everything else by them, newest first (drawn by moreFrames())
+            std::vector<const Item*> others;
+            if (found)
+                for (auto& x : all)
+                    if (x.makerName == it.makerName && !x.id.empty() && x.id != it.id) others.push_back(&x);
+            std::stable_sort(others.begin(), others.end(), [](const Item* a, const Item* b) { return a->date > b->date; });
+            more_.clear();
+            for (auto* x : others) more_.push_back({x->id, x->name, x->thumb});
+            moreMaker_ = found ? it.makerName : "";
+            moreFound_ = found;
+            auto fr = [&](int param, int f, int count) { frames.emplace_back(param, (f + 0.5f) / (float)count); };
+            (void)fr;
+            moreFrames(texts, frames);
             if (!found && getBool(kDetailOpen)) { set(kDetailOpen, 0.0f); notifyHostParameterChanged(kDetailOpen); }
         }
         std::string status = manager_->screenStatus();
@@ -676,7 +766,8 @@ private:
     }
 
     // Updates only what changed. A changed value makes the MPC re-read that text or picture.
-    void publish(const std::vector<std::pair<int, std::string>>& texts, const std::vector<std::pair<int, float>>& frames)
+    // quiet: a finger scroll. Each changed text and picture tells the MPC by itself; no whole-screen redraw.
+    void publish(const std::vector<std::pair<int, std::string>>& texts, const std::vector<std::pair<int, float>>& frames, bool quiet = false)
     {
         std::vector<int> changed;
         {
@@ -687,7 +778,7 @@ private:
         for (int i : changed) { setNormalised(i, getNormalised(i) > 0.5f ? 0.1f : 0.9f); notifyHostParameterChanged(i); }
         for (auto& f : frames)
             if (std::abs(getNormalised(f.first) - f.second) > 1e-4f) { setNormalised(f.first, f.second); notifyHostParameterChanged(f.first); changed.push_back(f.first); }
-        if (!changed.empty() && clock() - lastFullUpdate_ > 3.0) { requestDisplayUpdate(); lastFullUpdate_ = clock(); }
+        if (!quiet && !changed.empty() && clock() - lastFullUpdate_ > 3.0) { requestDisplayUpdate(); lastFullUpdate_ = clock(); }
     }
 
     // The screenshot for a card: which strip (A or B) and which frame in it. 0 = no picture.
@@ -778,6 +869,13 @@ private:
     std::string folder_, pin_, confirmKey_, notice_, detailKey_;
     std::map<std::string, int> thumbIndex_;
     std::set<std::string> realPicture_;
+    std::atomic<unsigned> pressed2_{0};                  // 1.5: MORE FROM tile taps
+    std::atomic<bool> scrollDirty_{false};               // 1.5: the page was scrolled
+    struct MoreTile { std::string id, name; int thumb = 0; };
+    std::vector<MoreTile> more_;                         // 1.5: MORE FROM, cached by rebuild()
+    std::string moreMaker_;
+    bool moreFound_ = false;
+    std::vector<std::string> moreIds_;                   // 1.5: the plugin on each MORE FROM tile
     std::string makerOnly_;                              // 1.5: showing everything by this maker ("" = normal list)
     int port_ = 0, lastView_ = -1, sort_ = 0, type_ = 0, thumbCount_ = 0, thumbHalf_ = 0, page_ = 0, lastOff_ = 0;
     double confirmAt_ = 0, noticeAt_ = 0, lastFullUpdate_ = 0;

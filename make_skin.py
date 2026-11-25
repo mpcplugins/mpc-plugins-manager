@@ -304,8 +304,6 @@ def build_theme(name, idx, out, prefix):
         n = r + 1
         y = CARD_Y0 + r * (CARD_H + CARD_GAP)
         kids.append(button("act%d" % n, prefix + "hit180.png", prefix + "hit180.png", idx["Action %d" % n], 1080, y + 42, 180, 52))
-        # 1.5: tap the maker's name for everything by that maker (named "maker..." so it hides with the cards)
-        kids.append(button("makerbtn%d" % n, prefix + "hitmaker.png", prefix + "hitmaker.png", idx["Maker Tap %d" % n], 278, y + 44, 250, 28))
     kids.append(button("prev", prefix + "prev.png", prefix + "prev.png", idx["Prev"], 24, 564, 48, 48))
     kids.append(label("page", idx["Page"], 76, 564, 150, 48, c["text"], 18, True, "horizontallyCentred verticallyCentred"))
     kids.append(button("next", prefix + "next.png", prefix + "next.png", idx["Next"], 230, 564, 48, 48))
@@ -346,6 +344,14 @@ def build_theme(name, idx, out, prefix):
     pd.text((640, 276), "VERSIONS", font=hf, fill=rgb(c["accent"] if name != "High Contrast" else c["text"]))
     pd.line((10, 268, 1236, 268), fill=rgb(c["line"]), width=2)
     page.save(os.path.join(out, prefix + "detail_bg.png"))
+    # 1.5: the same page scrolled down into MORE FROM <maker>: two rows of four tiles
+    more = Image.new("RGBA", (1248, bottom - top), clear)
+    md = ImageDraw.Draw(more)
+    md.rounded_rectangle((0, 0, 1247, bottom - top - 1), radius=14, fill=rgb(c["card"]), outline=rgb(c["line"]), width=2)
+    md.line((10, 56, 1236, 56), fill=rgb(c["line"]), width=2)
+    # (no empty picture boxes: a tile shows only when it has a plugin)
+    more.save(os.path.join(out, prefix + "more_bg.png"))
+    Image.new("RGBA", (SHOT_W, SHOT_H), clear).save(os.path.join(out, prefix + "hittile.png"))
     pill(130, 44, rgb(c["panel"]), rgb(c["line"]), "\u2190 BACK", rgb(c["text"]), 16, radius=10, black=True).save(os.path.join(out, prefix + "back.png"))
     only = ["IndexedEnabling/1/2/Parameter %d" % det]
     def D(n):
@@ -353,7 +359,38 @@ def build_theme(name, idx, out, prefix):
     X0, Y0 = 16, top
     dk = [entry("detail bg", "Image", {"version": 2, "imageType": "Regular", "colour": "0", "image": prefix + "detail_bg.png"},
                 bounds(X0, Y0, 1248, bottom - top, only_when=only))]
+    more_on = "IndexedEnabling/1/2/Parameter %d" % D("Detail More")
+    more_off = "IndexedEnabling/0/2/Parameter %d" % D("Detail More")
+    dk[0]["bounds"]["version"] = 2
+    dk[0]["bounds"]["additionalInvalidatingHandles"] = dk[0]["bounds"].get("additionalInvalidatingHandles", []) + [more_off]
+    dk.append(entry("more bg", "Image", {"version": 2, "imageType": "Regular", "colour": "0", "image": prefix + "more_bg.png"},
+                    bounds(X0, Y0, 1248, bottom - top, only_when=only + [more_on])))
+    # roll a finger up on the page to scroll down into MORE FROM (under every button, so taps still work)
+    dk.append(drag_area("dscroll", prefix + "clear2.png", D("Detail Scroll"), X0, Y0 + 56, 1248, bottom - top - 56))
     dk.append(button("back", prefix + "back.png", prefix + "back.png", D("Back"), X0 + 8, Y0 + 8, 130, 44))
+    # MORE FROM tiles (shown only while scrolled down)
+    for t in range(8):
+        r, col = divmod(t, 4)
+        tx, ty = X0 + 12 + col * 307, Y0 + 62 + r * 176
+        bank = D("M Thumb Bank %d" % (t + 1))
+        dk.append(film("mthumbA%d" % t, "thumbsA.png", -1, D("M Thumb %d" % (t + 1)), tx + 32, ty, SHOT_W, SHOT_H,
+                       only_when=only + [more_on, "IndexedEnabling/0/2/Parameter %d" % bank]))
+        dk.append(film("mthumbB%d" % t, "thumbsB.png", -1, D("M Thumb %d" % (t + 1)), tx + 32, ty, SHOT_W, SHOT_H,
+                       only_when=only + [more_on, "IndexedEnabling/1/2/Parameter %d" % bank]))
+        dk.append(label("mname%d" % t, D("M Name %d" % (t + 1)), tx, ty + SHOT_H + 4, 300, 28, c["text"], 17, True, "horizontallyCentred verticallyCentred"))
+        dk[-1]["bounds"]["version"] = 2
+        dk[-1]["bounds"]["additionalInvalidatingHandles"] = [more_on]
+        # tap the picture to open it; everywhere else on the page (names, gaps) still scrolls
+        dk.append(button("mopen%d" % t, prefix + "hittile.png", prefix + "hittile.png", D("M Open %d" % (t + 1)), tx + 32, ty, SHOT_W, SHOT_H))
+        dk[-1]["bounds"]["version"] = 2
+        dk[-1]["bounds"]["additionalInvalidatingHandles"] = [more_on]
+    dk.append(label("mtitle", D("More Title"), X0 + 150, Y0 + 6, 700, 48, c["accent"] if name != "High Contrast" else c["text"], 26, True))
+    dk[-1]["bounds"]["version"] = 2
+    dk[-1]["bounds"]["additionalInvalidatingHandles"] = [more_on]
+    dk.append(label("mhintup", D("More Hint"), X0 + 860, Y0 + 10, 376, 40, c["muted"], 15, True, "right verticallyCentred"))
+    dk[-1]["bounds"]["version"] = 2
+    dk[-1]["bounds"]["additionalInvalidatingHandles"] = [more_on]
+    first_top = len(dk)                   # from here on: the top of the page only
     dk.append(film("dthumbA", "thumbsA.png", -1, D("D Thumb"), X0 + 8, Y0 + 60, 400, 200, only_when=only + ["IndexedEnabling/0/2/Parameter %d" % D("D Thumb Bank")]))
     dk.append(film("dthumbB", "thumbsB.png", -1, D("D Thumb"), X0 + 8, Y0 + 60, 400, 200, only_when=only + ["IndexedEnabling/1/2/Parameter %d" % D("D Thumb Bank")]))
     dk.append(label("dname", D("D Name"), X0 + 150, Y0 + 6, 560, 48, c["text"], 32, True))
@@ -361,7 +398,6 @@ def build_theme(name, idx, out, prefix):
     dk.append(label("dversion", D("D Version"), X0 + 840, Y0 + 10, 210, 40, c["text"], 24, True, "right verticallyCentred"))
     dk.append(label("dmaker", D("D Maker"), X0 + 424, Y0 + 62, 330, 28, c["accent"] if name != "High Contrast" else c["text"], 18, True))
     Image.new("RGBA", (330, 28), clear).save(os.path.join(out, prefix + "hitdmaker.png"))
-    dk.append(button("dmakerbtn", prefix + "hitdmaker.png", prefix + "hitdmaker.png", D("Maker Tap"), X0 + 424, Y0 + 62, 330, 28))
     dk.append(label("dmeta", D("D Meta"), X0 + 760, Y0 + 62, 300, 28, c["muted"], 17, False))
     dk.append(film("dchip", prefix + "chip.png", 3, D("D Chip"), X0 + 424, Y0 + 94, 262, 28))
     dk.append(label("dtested", D("D Tested"), X0 + 430, Y0 + 94, 250, 28, c["text"], 15, True, "horizontallyCentred verticallyCentred"))
@@ -377,7 +413,19 @@ def build_theme(name, idx, out, prefix):
     # 1.3: follow this plugin's maker (top right of the page)
     dk.append(film("dfollow", prefix + "follow.png", 2, D("Fav Look"), X0 + 1060, Y0 + 10, 180, 40))
     dk.append(button("dfollowbtn", prefix + "hitfollow.png", prefix + "hitfollow.png", D("Fav Tap"), X0 + 1060, Y0 + 10, 180, 40))
+    # the hint at the bottom of the top of the page: "6 more from <maker>: roll up"
+    dk.append(label("mhint", D("More Hint"), X0 + 860, Y0 + 270, 376, 26, c["accent"] if name != "High Contrast" else c["text"], 15, True, "right verticallyCentred"))
+    for k in dk[first_top:]:              # the top of the page hides while scrolled down
+        b = k["bounds"]
+        b["version"] = 2
+        b["additionalInvalidatingHandles"] = b.get("additionalInvalidatingHandles", []) + [more_off]
     dk = [k for k in dk if k]
+    # stacking (as on the main list): pictures and texts, then the finger-scroll strip ON TOP of them (or they catch
+    # the finger and the page never scrolls), then the buttons on top of the strip so taps still work
+    strip_ = [k for k in dk if k["componentData"]["name"] == "dscroll"]
+    btns = [k for k in dk if k["componentData"]["type"] == "Button"]
+    rest = [k for k in dk if k not in strip_ and k not in btns]
+    dk = rest + strip_ + btns
     for k in dk:                          # everything on the page shows only while it is open
         b = k["bounds"]
         hs = b.get("additionalInvalidatingHandles", [])
@@ -389,7 +437,7 @@ def build_theme(name, idx, out, prefix):
     for i in range(2):
         kids.append(label("dneeds%d" % i, D("D Needs %d" % (i + 1)), X0 + 1060 - 0, Y0 + 360 + i * 22, 180, 22, c["warn"], 13, True))
         kids[-1]["bounds"]["version"] = 2
-        kids[-1]["bounds"]["additionalInvalidatingHandles"] = list(only)
+        kids[-1]["bounds"]["additionalInvalidatingHandles"] = list(only) + ["IndexedEnabling/0/2/Parameter %d" % D("Detail More")]
     return kids
 
 
