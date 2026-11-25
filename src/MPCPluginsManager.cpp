@@ -196,7 +196,7 @@ private:
         info.name         = "MPC Plugins Manager";
         info.vendor       = "The Disk King";
         info.uniqueId     = MPC_FOURCC('T', 'D', 'K', 'M');   // must match plugin.json "uid": "TDKM"
-        info.version      = 1500;
+        info.version      = 1501;
         info.isInstrument = true;
         info.numInputs    = 0;
         info.numOutputs   = 2;

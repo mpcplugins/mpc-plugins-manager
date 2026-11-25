@@ -2,13 +2,19 @@
 
 All notable changes to MPC Plugins Manager by The Disk King.
 
-## 1.5.0 (2026-11-25)
+## 1.5.1 (2026-11-25)
 
 - **More from the same maker, right on the plugin's page.** Open a plugin's page and roll your finger up: the page
   scrolls down into **MORE FROM <maker>**, every other plugin by that maker as pictures with names, 8 at a time.
-  Keep rolling for the rest; roll back down for the top of the page. Tap one to open its page. Under WHAT'S NEW the
-  page says how many more there are.
-- **Phone page:** tap a maker's name for everything by that maker; "Show all" goes back.
+  Keep rolling for the rest; roll back down for the top of the page. Tap a picture to open its page. Under WHAT'S NEW
+  the page says how many more there are.
+- Fixes 1.5.0: its maker list opened as a separate list and the plugin's page did not scroll. Scrolling is smooth (no
+  whole-screen redraws while you roll).
+
+## 1.5.0 (2026-11-25)
+
+- **Maker pages.** Tap a maker's name (on a plugin's card or its details page) and the list shows everything by that
+  maker. The phone page does the same: tap a maker's name, "Show all" goes back.
 
 ## 1.4.0 (2026-11-25)
 
