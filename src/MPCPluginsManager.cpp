@@ -5,6 +5,8 @@
 // each page shows 5 plugin cards with a screenshot and one button that does the right thing (INSTALL, UPDATE,
 // REMOVE, RESTORE). Turn pages with the arrows or Q-Link 1. SORT, TYPE and THEME are tap-to-change pills.
 // A phone or computer on the same Wi-Fi can also use the address and PIN shown at the bottom.
+// Follow a maker (FOLLOW on a plugin's details page): their new plugins and new versions come first in the list,
+// marked NEW, until you open or install them. TYPE > Followed shows everything from the makers you follow.
 // The list comes from mpcplugins.github.io (the same list as thediskking.com/plugins).
 //
 // How it stays safe:
@@ -62,7 +64,10 @@ const char* const kDTextNames[] = {"D Name", "D Maker", "D Meta", "D Version", "
 enum DText { dName, dMaker, dMeta, dVersion, dTested, dStats, dAbout1, dNeeds1 = dAbout1 + 6, dNew1 = dNeeds1 + 2, dHist1 = dNew1 + 4, kDTexts = dHist1 + 4 };
 constexpr int kDPic = kDText + kDTexts;          // the details page's pictures: Thumb, Thumb Bank, Badge, Chip, Look
 enum DPic { pThumb, pThumbBank, pBadge, pChip, pLook, kDPics };
-constexpr int kNumParams = kDPic + kDPics;
+// added in 1.3: follow a maker
+constexpr int kFavTap = kDPic + kDPics;          // button on the details page: follow / unfollow its maker
+constexpr int kFavLook = kFavTap + 1;            // picture: 0 FOLLOW, 1 FOLLOWING
+constexpr int kNumParams = kFavLook + 1;
 // must match THEME_ORDER in make_skin.py
 const char* const kThemes[] = {"Disk King", "Light", "Dark", "Midnight", "MPC Red", "Studio Green", "Ocean", "Purple Haze", "Sunset", "High Contrast"};
 constexpr int kNumThemes = 10;
@@ -70,17 +75,18 @@ constexpr int card(int c, CardField f) { return kCardBase + c * kPerCard + f; }
 
 // picture frames (must match make_skin.py)
 enum ActionFrame { aInstall, aUpdate, aRemove, aRestore, aWorking, aNotHere, aBlank, kActionFrames };
-enum BadgeFrame { bBlank, bStable, bBeta, bUntested, bInstalled, kBadgeFrames };
+enum BadgeFrame { bBlank, bStable, bBeta, bUntested, bInstalled, bNew, kBadgeFrames };
 enum ChipFrame { chNone, chTested, chOther, kChipFrames };
 
 const char* const kSorts[] = {"Most downloaded", "Newest", "A to Z"};
-const char* const kTypes[] = {"All types", "Instruments", "Effects", "Addins"};
+const char* const kTypes[] = {"All types", "Instruments", "Effects", "Addins", "Followed"};
+constexpr int kNumTypes = 5;
 
 struct Item
 {
-    std::string id, folder, name, maker, meta, version, tested, about, stats, notes, history, needs;
+    std::string id, folder, name, maker, makerName, meta, version, latest, tested, about, stats, notes, history, needs;
     int action = aBlank, badge = bBlank, chip = chNone, thumb = 0;
-    bool testedHere = false, builtBoth = false, installed = false, update = false, canInstall = false;
+    bool testedHere = false, builtBoth = false, installed = false, update = false, canInstall = false, fresh = false;
     long long downloads = 0;
     int featured = 0;
     std::string date;
@@ -119,6 +125,8 @@ public:
         for (int c = 1; c <= kCards; ++c) { std::string id = "open" + std::to_string(c), n = "Open " + std::to_string(c); addParam(mpc::boolParam(id.c_str(), n.c_str(), false)); }
         for (const char* d : kDTextNames) addText(d);
         for (const char* d : {"D Thumb", "D Thumb Bank", "D Badge", "D Chip", "D Look"}) addText(d);
+        addParam(mpc::boolParam("favtap", "Fav Tap", false));
+        addText("Fav Look");
         text_.assign(kNumParams, std::string());
         text_[kStatus] = "Starting...";
         text_[card(0, cName)] = "MPC Plugins Manager";
@@ -143,7 +151,7 @@ public:
     void parameterChanged(int index, float plainValue) override
     {
         bool on = plainValue >= 0.5f;
-        if ((index >= kPrev && index <= kUpdateAll) || isAction(index) || index == kBack || index == kDetailAction || (index >= kOpen1 && index < kOpen1 + kCards))
+        if ((index >= kPrev && index <= kUpdateAll) || isAction(index) || index == kBack || index == kDetailAction || index == kFavTap || (index >= kOpen1 && index < kOpen1 + kCards))
         { if (on) pressed_.fetch_or(bit(index)); return; }
         if (index == kShow || index == kScroll || index == kThemePick) dirty_ = true;
     }
@@ -152,7 +160,7 @@ public:
     {
         if (index == kShow) { static const char* v[] = {"Tested", "Untested", "Installed", "Updates", "Removed"}; int i = (int)plainValue; out = v[i < 0 ? 0 : i > 4 ? 4 : i]; return true; }
         if (index == kThemePick) { int i = (int)plainValue; out = kThemes[i < 0 ? 0 : i >= kNumThemes ? kNumThemes - 1 : i]; return true; }
-        if (index < kStatus || isAction(index) || (index >= kThemePick && index < kDText)) return false;
+        if (index < kStatus || isAction(index) || (index >= kThemePick && index < kDText) || index >= kFavTap) return false;
         std::lock_guard<std::mutex> g(textMu_);
         out = text_[(size_t)index];
         return true;
@@ -165,7 +173,7 @@ private:
         info.name         = "MPC Plugins Manager";
         info.vendor       = "The Disk King";
         info.uniqueId     = MPC_FOURCC('T', 'D', 'K', 'M');   // must match plugin.json "uid": "TDKM"
-        info.version      = 1200;
+        info.version      = 1300;
         info.isInstrument = true;
         info.numInputs    = 0;
         info.numOutputs   = 2;
@@ -186,6 +194,7 @@ private:
         if (isAction(i)) return 1ull << (40 + (i - kCardBase) / kPerCard);
         if (i == kBack) return 1ull << 50;
         if (i == kDetailAction) return 1ull << 51;
+        if (i == kFavTap) return 1ull << 56;
         if (i >= kOpen1 && i < kOpen1 + kCards) return 1ull << (52 + i - kOpen1);
         return 1ull << i;                               // header and footer buttons (all below 40)
     }
@@ -208,6 +217,7 @@ private:
         folder_ = mpc::pluginFolder();
         loadThumbs();
         loadTheme();
+        loadFollow();
         manager_ = std::make_unique<tdk::Manager>();
         manager_->start(folder_);
         pin_ = tdk::randomPin();
@@ -275,6 +285,42 @@ private:
         std::ofstream(themeFile()) << kThemes[i] << "\n";
     }
 
+    // ---------------------------------------------------------------- followed makers (kept on the drive, never sent)
+    // followed.txt: one maker per line. seen.txt: "plugin id<TAB>version" for what you have already seen from them.
+    tdk::fs::path followFile(const char* name) const { return themeFile().parent_path() / name; }
+
+    void loadFollow()
+    {
+        follow_.clear(); seen_.clear();
+        auto lines = [](const std::string& text) {
+            std::vector<std::string> out; size_t s = 0;
+            while (s < text.size()) { size_t e = text.find('\n', s); if (e == std::string::npos) e = text.size();
+                std::string l = text.substr(s, e - s); while (!l.empty() && l.back() == '\r') l.pop_back();
+                if (!l.empty()) out.push_back(l); s = e + 1; }
+            return out; };
+        for (auto& l : lines(tdk::readText(followFile("followed.txt")))) follow_.insert(l);
+        for (auto& l : lines(tdk::readText(followFile("seen.txt"))))
+        { size_t t = l.find('\t'); if (t != std::string::npos) seen_[l.substr(0, t)] = l.substr(t + 1); }
+    }
+
+    void saveFollow()
+    {
+        std::error_code ec;
+        tdk::fs::create_directories(themeFile().parent_path(), ec);
+        { std::ofstream f(followFile("followed.txt")); for (auto& m : follow_) f << m << "\n"; }
+        { std::ofstream f(followFile("seen.txt")); for (auto& kv : seen_) f << kv.first << "\t" << kv.second << "\n"; }
+    }
+
+    // Seen: it stops being NEW (opened, installed, or already there when you started following the maker).
+    void markSeen(const std::string& id, const std::string& version)
+    {
+        if (id.empty() || version.empty()) return;
+        auto it = seen_.find(id);
+        if (it != seen_.end() && tdk::compareVersions(it->second, version) >= 0) return;
+        seen_[id] = version;
+        saveFollow();
+    }
+
     // Puts a button back to "off" after a press, so every tap is one press (and projects never store a pressed button).
     void release(int index) { setNormalised(index, 0.0f); notifyHostParameterChanged(index); }
 
@@ -302,7 +348,7 @@ private:
         auto has = [&](int i) { return (presses & bit(i)) != 0; };
         for (int i = kPrev; i <= kUpdateAll; ++i) if (has(i)) release(i);
         for (int c = 0; c < kCards; ++c) if (has(card(c, cAction))) release(card(c, cAction));
-        for (int i : {kBack, kDetailAction}) if (has(i)) release(i);
+        for (int i : {kBack, kDetailAction, kFavTap}) if (has(i)) release(i);
         for (int c = 0; c < kCards; ++c) if (has(kOpen1 + c)) release(kOpen1 + c);
         if (has(kBack)) { set(kDetailOpen, 0.0f); notifyHostParameterChanged(kDetailOpen); }
 
@@ -312,7 +358,7 @@ private:
         if (has(kPrev)) goPage(page_ - 1, size);
         if (has(kNext)) goPage(page_ + 1, size);
         if (has(kSortTap)) { sort_ = (sort_ + 1) % 3; goPage(0, size); }
-        if (has(kTypeTap)) { type_ = (type_ + 1) % 4; goPage(0, size); }
+        if (has(kTypeTap)) { type_ = (type_ + 1) % kNumTypes; goPage(0, size); }
         if (has(kRefresh)) { manager_->request("refresh", ""); note("Getting the newest plugin list"); }
         if (has(kThemeTap))                              // live: the screen shows the next theme at once
         {
@@ -336,8 +382,28 @@ private:
             size_t i = (size_t)(off + c);
             if (i >= list_.size()) continue;
             detailKey_ = list_[i].id.empty() ? list_[i].folder : list_[i].id;
+            if (list_[i].fresh) markSeen(list_[i].id, list_[i].latest);   // opened: no longer NEW
             set(kDetailOpen, 1.0f);
             notifyHostParameterChanged(kDetailOpen);
+        }
+        if (has(kFavTap) && getBool(kDetailOpen))          // follow / unfollow the maker on the details page
+        {
+            Item it;
+            bool found = false;
+            { std::lock_guard<std::mutex> g(listMu_); found = findItem(detailKey_, it); }
+            if (found && !it.makerName.empty())
+            {
+                if (follow_.erase(it.makerName)) note("Stopped following " + it.makerName);
+                else
+                {
+                    follow_.insert(it.makerName);
+                    // everything they have out now counts as seen: only what they release from here on is NEW
+                    std::lock_guard<std::mutex> g(listMu_);
+                    for (auto& x : all_) if (x.makerName == it.makerName && !x.id.empty()) seen_[x.id] = x.latest;
+                    note("Following " + it.makerName + ": new ones come first");
+                }
+                saveFollow();
+            }
         }
         if (has(kDetailAction) && getBool(kDetailOpen))
         {
@@ -369,10 +435,12 @@ private:
             {
                 case aInstall:
                     if (!it.testedHere && !confirmed("install:" + it.id)) { note("Not tested on your MPC. Tap INSTALL again to go ahead"); break; }
+                    if (it.fresh) markSeen(it.id, it.latest);
                     note(manager_->request("install", it.id) == "OK" ? "Installing " + it.name : "Already waiting");
                     break;
                 case aUpdate:
                     if (it.folder == ownFolder()) { note("Update the manager by hand for now: thediskking.com"); break; }
+                    if (it.fresh) markSeen(it.id, it.latest);
                     note(manager_->request("install", it.id) == "OK" ? "Updating " + it.name : "Already waiting");
                     break;
                 case aRemove:
@@ -406,11 +474,12 @@ private:
         const int view = std::max(0, std::min(getInt(kShow), 4));
         std::vector<Item> all, shown;
         std::set<std::string> matched;
-        int updates = 0, testedHere = 0;
+        int updates = 0, testedHere = 0, fresh = 0;
         for (const tdk::Entry& e : s.plugins)
         {
             Item it;
             it.id = e.id; it.name = e.name; it.downloads = e.downloads; it.date = e.updated; it.featured = e.featured;
+            it.makerName = e.maker; it.latest = e.version;
             it.testedHere = e.tested() && (e.testedOn.empty() || e.testedOn.find(gen2 ? "gen2" : "gen1") != std::string::npos);
             // Tested on the other kind of MPC and built as one download for both: shown with the tested plugins, marked as such.
             it.builtBoth = !it.testedHere && e.tested() && e.universal();
@@ -424,14 +493,21 @@ private:
             it.update = it.installed && it.canInstall && !have.empty() && tdk::compareVersions(have, e.version) < 0;   // only NEWER
             it.action = it.update ? aUpdate : it.installed ? aRemove : it.canInstall ? aInstall : aNotHere;
             if (!s.current.empty() && (s.current == e.id || s.current == it.folder)) it.action = aWorking;
-            it.badge = it.installed ? bInstalled : e.beta() ? bBeta : e.tested() ? bStable : bUntested;
+            // NEW: from a maker you follow, and a plugin or version you have not seen (or installed) yet
+            if (follow_.count(e.maker) && !(it.installed && !it.update))
+            {
+                auto sv = seen_.find(e.id);
+                it.fresh = sv == seen_.end() || tdk::compareVersions(sv->second, e.version) < 0;
+            }
+            it.badge = it.installed ? bInstalled : it.fresh ? bNew : e.beta() ? bBeta : e.tested() ? bStable : bUntested;
             it.chip = it.testedHere ? chTested : e.tested() ? chOther : chNone;
             it.tested = it.testedHere ? "Tested on your MPC (" + std::string(gen2 ? "Gen2" : "Gen1") + ")"
                       : it.builtBoth ? "Tested on " + std::string(gen2 ? "Gen1" : "Gen2") + ", built for " + std::string(gen2 ? "Gen2" : "Gen1")
                       : e.tested() ? "Tested on " + std::string(gen2 ? "Gen1" : "Gen2") + " only" : "";
             it.version = it.update ? "v" + have + " > v" + e.version : "v" + e.version;
             std::string kind = e.kind.empty() ? "plugin" : e.kind;
-            it.maker = (e.featured ? "FEATURED | by " : "by ") + e.maker;
+            it.maker = it.fresh ? "NEW from " + e.maker : (e.featured ? "FEATURED | by " : "by ") + e.maker;
+            if (it.maker.size() > kMaxText) it.maker = it.maker.substr(0, kMaxText);
             it.meta = kind + (e.style.empty() || e.style == "other" ? "" : " | " + e.style);
             it.about = e.summary; it.notes = e.notes; it.history = e.history; it.needs = e.needs;
             if (it.needs.empty() && !e.userFiles.empty()) it.needs = "Your own files: " + e.userFiles;
@@ -442,10 +518,13 @@ private:
             it.thumb = th == thumbIndex_.end() ? 0 : th->second;
             if (it.update) ++updates;
             if (it.testedHere) ++testedHere;
-            bool typeOk = type_ == 0 || (type_ == 1 && e.kind == "instrument") || (type_ == 2 && e.kind == "effect") || (type_ == 3 && e.kind == "addin");
+            if (it.fresh) ++fresh;
+            bool typeOk = type_ == 0 || (type_ == 1 && e.kind == "instrument") || (type_ == 2 && e.kind == "effect") || (type_ == 3 && e.kind == "addin")
+                       || (type_ == 4 && follow_.count(e.maker));
             all.push_back(it);
             if (!typeOk) continue;
-            if ((view == 0 && (it.testedHere || it.builtBoth)) || (view == 1 && !it.testedHere && !it.builtBoth) || (view == 2 && it.installed) || (view == 3 && it.update))
+                // NEW from a followed maker shows in the main list even before anyone has tested it
+            if ((view == 0 && (it.testedHere || it.builtBoth || it.fresh)) || (view == 1 && !it.testedHere && !it.builtBoth) || (view == 2 && it.installed) || (view == 3 && it.update))
                 shown.push_back(it);
         }
         if (view == 2)                                       // installed folders that are not on the list
@@ -466,6 +545,8 @@ private:
             }
         if (view != 4)
             std::stable_sort(shown.begin(), shown.end(), [this](const Item& a, const Item& b) {
+                if (a.fresh != b.fresh) return a.fresh;                                              // NEW from followed makers first
+                if (a.fresh && b.fresh && a.date != b.date) return a.date > b.date;
                 int fa = a.featured ? a.featured : 1 << 30, fb = b.featured ? b.featured : 1 << 30;   // Featured first
                 if (fa != fb) return fa < fb;
                 bool pa = realPicture_.count(a.id) > 0, pb = realPicture_.count(b.id) > 0;          // then real pictures
@@ -551,6 +632,7 @@ private:
             frame(kDPic + pBadge, found ? it.badge : bBlank, kBadgeFrames);
             frame(kDPic + pChip, found ? it.chip : chNone, kChipFrames);
             frame(kDPic + pLook, found ? it.action : aBlank, kActionFrames);
+            frame(kFavLook, found && follow_.count(it.makerName) ? 1 : 0, 2);
             if (!found && getBool(kDetailOpen)) { set(kDetailOpen, 0.0f); notifyHostParameterChanged(kDetailOpen); }
         }
         std::string status = manager_->screenStatus();
@@ -574,8 +656,10 @@ private:
         texts.emplace_back(kType, kTypes[type_]);
         texts.emplace_back(kTheme, std::string("Theme: ") + kThemes[std::max(0, std::min(getInt(kThemePick), kNumThemes - 1))]);
         texts.emplace_back(kPage, "Page " + std::to_string(page_ + 1) + " / " + std::to_string(pageCount((int)shown.size())));
-        texts.emplace_back(kSummary, shown.empty() ? "No plugins here" : std::to_string(off + 1) + "-" + std::to_string(std::min((int)shown.size(), off + kCards))
-                                     + " of " + std::to_string(shown.size()) + " | " + std::to_string(updates) + (updates == 1 ? " update" : " updates"));
+        std::string sum = shown.empty() ? "No plugins here" : std::to_string(off + 1) + "-" + std::to_string(std::min((int)shown.size(), off + kCards))
+                                     + " of " + std::to_string(shown.size()) + " | " + std::to_string(updates) + (updates == 1 ? " update" : " updates");
+        if (fresh && !shown.empty()) sum = std::to_string(fresh) + " NEW | " + sum;
+        texts.emplace_back(kSummary, sum.substr(0, kMaxText));
         texts.emplace_back(kPhone, !port_ ? "" : ip.empty() ? "Phone: connect to Wi-Fi" : "Phone: http://" + ip + ":" + std::to_string(port_));
         texts.emplace_back(kPin, port_ && !ip.empty() ? "PIN " + pin_ : "");
         frame(kOnline, s.online ? 1 : 0, 2);
@@ -696,6 +780,8 @@ private:
     std::mutex textMu_, listMu_;
     std::vector<std::string> text_;
     std::vector<Item> list_, all_;
+    std::set<std::string> follow_;                       // makers you follow (watcher thread only)
+    std::map<std::string, std::string> seen_;            // plugin id -> newest version you have seen from them
 };
 
 MPC_PLUGIN_ENTRY(MPCPluginsManager)

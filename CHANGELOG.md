@@ -2,6 +2,15 @@
 
 All notable changes to MPC Plugins Manager by The Disk King.
 
+## 1.3.0 (2026-11-25)
+
+- **Follow your favorite makers.** Open a plugin's details page and tap **FOLLOW MAKER**. From then on, every new
+  plugin and every new version from that maker comes **first in the list, marked NEW** ("NEW from <maker>"), until you
+  open it or install it. Tap **FOLLOWING** to stop.
+- **TYPE > Followed** shows everything from the makers you follow.
+- The list footer counts what is new ("2 NEW | ...").
+- Your followed makers are kept on your MPC (MPC Plugins Manager/followed.txt); nothing is sent anywhere.
+
 ## 1.2.0 (2026-11-21)
 
 - **Gen1 owners see more plugins in the main list.** A plugin tested on Gen2 that comes as one download for every MPC

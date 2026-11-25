@@ -72,7 +72,7 @@ def rgb(h, a=255):
     return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16), a)
 
 
-SYMBOLS = "\u2713\u26a0\u2191\u2193\u21ba"
+SYMBOLS = "\u2713\u26a0\u2191\u2193\u21ba\u2605\u2606"
 
 
 def symbol_font(size):
@@ -246,8 +246,14 @@ def build_theme(name, idx, out, prefix):
         frames.append(im)
     strip(frames).save(os.path.join(out, prefix + "action.png"))
     badges = [("", None), ("STABLE", c["muted"]), ("BETA", c["bad"]), ("UNTESTED", c["warn"]), ("INSTALLED", c["good"])]
-    strip([Image.new("RGBA", (110, 28), clear) if not t else pill(110, 28, clear, rgb(col), t, rgb(col), 13, radius=6)
-           for t, col in badges]).save(os.path.join(out, prefix + "badge.png"))
+    bimgs = [Image.new("RGBA", (110, 28), clear) if not t else pill(110, 28, clear, rgb(col), t, rgb(col), 13, radius=6) for t, col in badges]
+    # 1.3: NEW from a maker you follow (filled, so it stands out)
+    bimgs.append(pill(110, 28, rgb(c["accent"]), None, "\u2605 NEW", rgb(c["accent_text"]), 14, radius=6, black=True))
+    strip(bimgs).save(os.path.join(out, prefix + "badge.png"))
+    # 1.3: FOLLOW / FOLLOWING (the maker), on the details page
+    strip([pill(180, 40, clear, rgb(c["accent"]), "\u2606 FOLLOW MAKER", rgb(c["accent"] if name != "High Contrast" else c["text"]), 15, radius=10, black=True),
+           pill(180, 40, rgb(c["accent"]), None, "\u2605 FOLLOWING", rgb(c["accent_text"]), 15, radius=10, black=True)]).save(os.path.join(out, prefix + "follow.png"))
+    Image.new("RGBA", (180, 40), clear).save(os.path.join(out, prefix + "hitfollow.png"))
     chips = [Image.new("RGBA", (300, 28), clear),
              pill(300, 28, clear, rgb(c["good"]), None, None, radius=6),
              pill(300, 28, clear, rgb(c["warn"]), None, None, radius=6)]
@@ -285,7 +291,7 @@ def build_theme(name, idx, out, prefix):
         kids.append(label("meta%d" % n, idx["Meta %d" % n], 532, y + 44, 270, 28, c["muted"], 17, False))
         kids.append(label("about1-%d" % n, idx["About A %d" % n], 278, y + 74, 520, 26, c["muted"], 17, False))
         kids.append(label("about2-%d" % n, idx["About B %d" % n], 278, y + 100, 520, 26, c["muted"], 17, False))
-        kids.append(film("badge%d" % n, prefix + "badge.png", 5, idx["Badge %d" % n], 812, y + 10, 110, 28))
+        kids.append(film("badge%d" % n, prefix + "badge.png", 6, idx["Badge %d" % n], 812, y + 10, 110, 28))
         kids.append(label("version%d" % n, idx["Version %d" % n], 924, y + 6, 150, 36, c["text"], 22, True, "right verticallyCentred"))
         kids.append(film("chip%d" % n, prefix + "chip.png", 3, idx["Chip %d" % n], 812, y + 50, 262, 28))
         kids.append(label("tested%d" % n, idx["Tested %d" % n], 818, y + 50, 250, 28, c["text"], 15, True, "horizontallyCentred verticallyCentred"))
@@ -348,7 +354,7 @@ def build_theme(name, idx, out, prefix):
     dk.append(film("dthumbA", "thumbsA.png", -1, D("D Thumb"), X0 + 8, Y0 + 60, 400, 200, only_when=only + ["IndexedEnabling/0/2/Parameter %d" % D("D Thumb Bank")]))
     dk.append(film("dthumbB", "thumbsB.png", -1, D("D Thumb"), X0 + 8, Y0 + 60, 400, 200, only_when=only + ["IndexedEnabling/1/2/Parameter %d" % D("D Thumb Bank")]))
     dk.append(label("dname", D("D Name"), X0 + 150, Y0 + 6, 560, 48, c["text"], 32, True))
-    dk.append(film("dbadge", prefix + "badge.png", 5, D("D Badge"), X0 + 720, Y0 + 16, 110, 28))
+    dk.append(film("dbadge", prefix + "badge.png", 6, D("D Badge"), X0 + 720, Y0 + 16, 110, 28))
     dk.append(label("dversion", D("D Version"), X0 + 840, Y0 + 10, 210, 40, c["text"], 24, True, "right verticallyCentred"))
     dk.append(label("dmaker", D("D Maker"), X0 + 424, Y0 + 62, 330, 28, c["accent"] if name != "High Contrast" else c["text"], 18, True))
     dk.append(label("dmeta", D("D Meta"), X0 + 760, Y0 + 62, 300, 28, c["muted"], 17, False))
@@ -363,6 +369,9 @@ def build_theme(name, idx, out, prefix):
         dk.append(label("dhist%d" % i, D("D Hist %d" % (i + 1)), X0 + 640, Y0 + 298 + i * 24, 400, 24, c["muted"], 16, True))
     dk.append(film("dlook", prefix + "action.png", 7, D("D Look"), X0 + 1060, Y0 + 300, 180, 52))
     dk.append(button("daction", prefix + "hit180.png", prefix + "hit180.png", D("Detail Action"), X0 + 1060, Y0 + 300, 180, 52))
+    # 1.3: follow this plugin's maker (top right of the page)
+    dk.append(film("dfollow", prefix + "follow.png", 2, D("Fav Look"), X0 + 1060, Y0 + 10, 180, 40))
+    dk.append(button("dfollowbtn", prefix + "hitfollow.png", prefix + "hitfollow.png", D("Fav Tap"), X0 + 1060, Y0 + 10, 180, 40))
     dk = [k for k in dk if k]
     for k in dk:                          # everything on the page shows only while it is open
         b = k["bounds"]
