@@ -299,10 +299,13 @@ def build_theme(name, idx, out, prefix):
         kids.append(film("actimg%d" % n, prefix + "action.png", 7, idx["Action Look %d" % n], 1080, y + 42, 180, 52))
     # finger scrolling: an invisible drag strip over the cards, under the buttons (so buttons still take taps)
     kids.append(drag_area("scroll", prefix + "clear2.png", idx["Scroll"], 16, CARD_Y0, 1060, ROWS * (CARD_H + CARD_GAP) - CARD_GAP))
+    Image.new("RGBA", (250, 28), clear).save(os.path.join(out, prefix + "hitmaker.png"))
     for r in range(ROWS):
         n = r + 1
         y = CARD_Y0 + r * (CARD_H + CARD_GAP)
         kids.append(button("act%d" % n, prefix + "hit180.png", prefix + "hit180.png", idx["Action %d" % n], 1080, y + 42, 180, 52))
+        # 1.5: tap the maker's name for everything by that maker (named "maker..." so it hides with the cards)
+        kids.append(button("makerbtn%d" % n, prefix + "hitmaker.png", prefix + "hitmaker.png", idx["Maker Tap %d" % n], 278, y + 44, 250, 28))
     kids.append(button("prev", prefix + "prev.png", prefix + "prev.png", idx["Prev"], 24, 564, 48, 48))
     kids.append(label("page", idx["Page"], 76, 564, 150, 48, c["text"], 18, True, "horizontallyCentred verticallyCentred"))
     kids.append(button("next", prefix + "next.png", prefix + "next.png", idx["Next"], 230, 564, 48, 48))
@@ -357,6 +360,8 @@ def build_theme(name, idx, out, prefix):
     dk.append(film("dbadge", prefix + "badge.png", 6, D("D Badge"), X0 + 720, Y0 + 16, 110, 28))
     dk.append(label("dversion", D("D Version"), X0 + 840, Y0 + 10, 210, 40, c["text"], 24, True, "right verticallyCentred"))
     dk.append(label("dmaker", D("D Maker"), X0 + 424, Y0 + 62, 330, 28, c["accent"] if name != "High Contrast" else c["text"], 18, True))
+    Image.new("RGBA", (330, 28), clear).save(os.path.join(out, prefix + "hitdmaker.png"))
+    dk.append(button("dmakerbtn", prefix + "hitdmaker.png", prefix + "hitdmaker.png", D("Maker Tap"), X0 + 424, Y0 + 62, 330, 28))
     dk.append(label("dmeta", D("D Meta"), X0 + 760, Y0 + 62, 300, 28, c["muted"], 17, False))
     dk.append(film("dchip", prefix + "chip.png", 3, D("D Chip"), X0 + 424, Y0 + 94, 262, 28))
     dk.append(label("dtested", D("D Tested"), X0 + 430, Y0 + 94, 250, 28, c["text"], 15, True, "horizontallyCentred verticallyCentred"))

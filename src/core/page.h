@@ -45,6 +45,9 @@ main{padding:12px 16px 40px;max-width:900px;margin:0 auto}
 .fol{border:1px solid var(--orange);background:#fff;color:var(--orange);border-radius:10px;padding:6px 10px;font-weight:900;font-size:12px;text-transform:uppercase;letter-spacing:.04em;margin-left:6px}
 .fol.on{background:var(--orange);color:#fff}
 .t-new{background:var(--orange)}
+.mk{color:var(--orange);text-decoration:underline;cursor:pointer}
+#makerbar{display:none;background:var(--ink);color:#fff;border-radius:12px;padding:10px 12px;font-weight:900;margin-bottom:10px;align-items:center;justify-content:space-between;gap:8px}
+#makerbar button{border:0;border-radius:10px;background:var(--orange);color:#fff;font-weight:900;padding:8px 12px;text-transform:uppercase}
 .pick{float:right;width:26px;height:26px;accent-color:var(--orange)}
 .tools{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
 .tools button{border:1px solid #4b362144;background:#fff;color:var(--ink);border-radius:10px;padding:9px 12px;font-weight:900;font-size:12px;text-transform:uppercase}
@@ -81,6 +84,7 @@ a{color:inherit}
 </header>
 <main>
  <div class="warn" id="warn">&#9888; Untested or beta: no hardware test is recorded by the maker for this version. It may crash your MPC or damage projects. Save and back up first.</div>
+ <div id="makerbar"><span id="makername"></span><button id="makerclose">Show all</button></div>
  <div class="tools" id="tools"></div>
  <div id="list"></div>
  <div id="selbar"><span id="selcount"></span><button id="selgo">Install selected</button></div>
@@ -88,7 +92,7 @@ a{color:inherit}
 </main>
 <script>
 (function(){
-var pin='',tab='tested',state=null,plugins=[],gen='',picking=false,picked={};
+var pin='',tab='tested',state=null,plugins=[],gen='',picking=false,picked={},makerOnly='';
 function follows(p){return !!(state&&state.followed&&state.followed.indexOf(p.maker)>=0);}
 // NEW: from a maker you follow, not seen (opened or installed) yet, and not already installed at this version
 function fresh(p){if(!follows(p))return false;var iv=installedVersion(p);if(iv&&!newer(iv.version,p.version))return false;var s=state.seen&&state.seen[p.id];return !s||newer(s,p.version);}
@@ -114,7 +118,8 @@ function card(p){
  var st=testedHere(p)?['t-ok','✓ Tested & working on '+(state&&state.gen==='gen2'?'Gen2':'Gen1')]:builtBoth(p)?['t-un','Tested on '+String(p.tested).replace(/gen/g,'Gen')+', built for your MPC']:p.tier==='verified'?['t-un','Tested on '+String(p.tested).replace(/gen/g,'Gen')+' only, not on your MPC']:p.tier==='experimental'?['t-beta','⚠ Beta / unfinished']:['t-un','Not yet tested'];
  c.appendChild(el('span','strip '+st[0],st[1]));
  c.appendChild(el('div','name',p.name));
- var mt=el('div','meta','by '+p.maker+' · '+(p.kind||'plugin')+' · v'+p.version+(iv?' · installed v'+(iv.version||'?'):''));
+ var mt=el('div','meta','by ');var mk=el('span','mk',p.maker);mk.onclick=function(){makerOnly=p.maker;render();window.scrollTo(0,0);};mt.appendChild(mk);
+ mt.appendChild(document.createTextNode(' · '+(p.kind||'plugin')+' · v'+p.version+(iv?' · installed v'+(iv.version||'?'):'')));
  var fb=el('button','fol'+(follows(p)?' on':''),follows(p)?'\u2605 Following':'\u2606 Follow maker');
  fb.onclick=function(){act(follows(p)?'unfollow':'follow',p.maker,null);};mt.appendChild(fb);c.appendChild(mt);
  if(picking&&p.can&&!iv){var cb=el('input','pick');cb.type='checkbox';cb.checked=!!picked[p.id];cb.onchange=function(){if(cb.checked)picked[p.id]=1;else delete picked[p.id];selbar();};c.insertBefore(cb,c.firstChild);}
@@ -140,6 +145,7 @@ function render(){
    var a=el('div','acts'),b=el('button','up','Restore');b.onclick=function(){act('restore',n,null);};a.appendChild(b);c.appendChild(a);out.push(c);});
  }else{
   plugins.forEach(function(p){
+   if(makerOnly){if(p.maker===makerOnly)out.push(card(p));return;}   // a maker's page: all of theirs, whatever the tab
    var iv=installedVersion(p),tested=testedHere(p);
    var both=builtBoth(p),nw=fresh(p); if(tab==='tested'&&!tested&&!both&&!nw)return; if(tab==='untested'&&(tested||both))return; if(tab==='installed'&&!iv)return;
    if(tab==='updates'&&!(iv&&p.can&&newer(iv.version,p.version)))return;
@@ -147,6 +153,7 @@ function render(){
    if(q&&(p.name+' '+p.maker+' '+(p.about||'')).toLowerCase().indexOf(q)<0)return;
    out.push(card(p));});
  }
+ $('makerbar').style.display=makerOnly?'flex':'none';$('makername').textContent=makerOnly?'Everything by '+makerOnly+' ('+out.length+')':'';
  var tools=$('tools');tools.replaceChildren();
  if(tab==='updates'&&out.length){var ua=el('button','go','Update all ('+out.length+')');ua.onclick=function(){if(!confirm('Update all '+out.length+' plugins? Your own files are kept, and old versions go to Removed Plugins.'))return;plugins.forEach(function(p){var iv=installedVersion(p);if(iv&&p.can&&newer(iv.version,p.version))act('install',p.id,null);});};tools.appendChild(ua);}
  if(tab==='tested'||tab==='untested'){var sp=el('button',null,picking?'Done selecting':'Select several');sp.onclick=function(){picking=!picking;if(!picking)picked={};selbar();render();};tools.appendChild(sp);}
@@ -174,8 +181,9 @@ function fillSounds(){var s=$('style'),have={};plugins.forEach(function(p){if(p.
 function selbar(){var n=Object.keys(picked).length;$('selbar').style.display=picking&&n?'flex':'none';$('selcount').textContent=n+' selected';}
 $('selgo').onclick=function(){var ids=Object.keys(picked);var risky=ids.some(function(id){var p=plugins.filter(function(x){return x.id===id;})[0];return p&&!testedHere(p);});if(!confirm('Install '+ids.length+' plugins?'+(risky?' Some are UNTESTED and may crash your MPC.':'')))return;ids.forEach(function(id){act('install',id,null);});picked={};picking=false;selbar();render();};
 $('sort').onchange=render;$('style').onchange=render;
+$('makerclose').onclick=function(){makerOnly='';render();};
 $('drive').onchange=function(){act('drive',this.value,null);};
-$('tabs').onclick=function(e){var b=e.target.closest('button');if(!b)return;tab=b.getAttribute('data-t');
+$('tabs').onclick=function(e){var b=e.target.closest('button');if(!b)return;tab=b.getAttribute('data-t');makerOnly='';
  Array.prototype.forEach.call(this.children,function(x){x.classList.toggle('on',x===b);});render();};
 var t;$('q').oninput=function(){clearTimeout(t);t=setTimeout(render,150);};$('kind').onchange=render;
 if(pin)poll(true);else showPin('');

@@ -2,6 +2,12 @@
 
 All notable changes to MPC Plugins Manager by The Disk King.
 
+## 1.5.0 (2026-11-25)
+
+- **Maker pages.** Tap a maker's name (on a plugin's card or its details page) and the list shows **everything by
+  that maker**, every tab at once, scrollable like the normal list. The TYPE pill shows "By <maker>"; tap it to go
+  back. The phone page does the same: tap a maker's name, "Show all" goes back.
+
 ## 1.4.0 (2026-11-25)
 
 - **Follow makers on the phone page too.** Every plugin there has a **Follow maker** button; NEW plugins from the

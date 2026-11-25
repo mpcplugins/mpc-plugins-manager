@@ -67,7 +67,10 @@ enum DPic { pThumb, pThumbBank, pBadge, pChip, pLook, kDPics };
 // added in 1.3: follow a maker
 constexpr int kFavTap = kDPic + kDPics;          // button on the details page: follow / unfollow its maker
 constexpr int kFavLook = kFavTap + 1;            // picture: 0 FOLLOW, 1 FOLLOWING
-constexpr int kNumParams = kFavLook + 1;
+// added in 1.5: tap a maker's name (details page, or a card) for everything by that maker
+constexpr int kMakerTap = kFavLook + 1;          // the details page's maker name
+constexpr int kMakerTap1 = kMakerTap + 1;        // the cards' maker names (1..3)
+constexpr int kNumParams = kMakerTap1 + kCards;
 // must match THEME_ORDER in make_skin.py
 const char* const kThemes[] = {"Disk King", "Light", "Dark", "Midnight", "MPC Red", "Studio Green", "Ocean", "Purple Haze", "Sunset", "High Contrast"};
 constexpr int kNumThemes = 10;
@@ -127,6 +130,8 @@ public:
         for (const char* d : {"D Thumb", "D Thumb Bank", "D Badge", "D Chip", "D Look"}) addText(d);
         addParam(mpc::boolParam("favtap", "Fav Tap", false));
         addText("Fav Look");
+        addParam(mpc::boolParam("makertap", "Maker Tap", false));
+        for (int c = 1; c <= kCards; ++c) { std::string id = "makertap" + std::to_string(c), n = "Maker Tap " + std::to_string(c); addParam(mpc::boolParam(id.c_str(), n.c_str(), false)); }
         text_.assign(kNumParams, std::string());
         text_[kStatus] = "Starting...";
         text_[card(0, cName)] = "MPC Plugins Manager";
@@ -151,7 +156,7 @@ public:
     void parameterChanged(int index, float plainValue) override
     {
         bool on = plainValue >= 0.5f;
-        if ((index >= kPrev && index <= kUpdateAll) || isAction(index) || index == kBack || index == kDetailAction || index == kFavTap || (index >= kOpen1 && index < kOpen1 + kCards))
+        if ((index >= kPrev && index <= kUpdateAll) || isAction(index) || index == kBack || index == kDetailAction || index == kFavTap || (index >= kMakerTap && index < kMakerTap1 + kCards) || (index >= kOpen1 && index < kOpen1 + kCards))
         { if (on) pressed_.fetch_or(bit(index)); return; }
         if (index == kShow || index == kScroll || index == kThemePick) dirty_ = true;
     }
@@ -173,7 +178,7 @@ private:
         info.name         = "MPC Plugins Manager";
         info.vendor       = "The Disk King";
         info.uniqueId     = MPC_FOURCC('T', 'D', 'K', 'M');   // must match plugin.json "uid": "TDKM"
-        info.version      = 1400;
+        info.version      = 1500;
         info.isInstrument = true;
         info.numInputs    = 0;
         info.numOutputs   = 2;
@@ -195,6 +200,7 @@ private:
         if (i == kBack) return 1ull << 50;
         if (i == kDetailAction) return 1ull << 51;
         if (i == kFavTap) return 1ull << 56;
+        if (i >= kMakerTap && i < kMakerTap1 + kCards) return 1ull << (57 + i - kMakerTap);   // 57..60
         if (i >= kOpen1 && i < kOpen1 + kCards) return 1ull << (52 + i - kOpen1);
         return 1ull << i;                               // header and footer buttons (all below 40)
     }
@@ -315,6 +321,7 @@ private:
         for (int i = kPrev; i <= kUpdateAll; ++i) if (has(i)) release(i);
         for (int c = 0; c < kCards; ++c) if (has(card(c, cAction))) release(card(c, cAction));
         for (int i : {kBack, kDetailAction, kFavTap}) if (has(i)) release(i);
+        for (int i = kMakerTap; i < kMakerTap1 + kCards; ++i) if (has(i)) release(i);
         for (int c = 0; c < kCards; ++c) if (has(kOpen1 + c)) release(kOpen1 + c);
         if (has(kBack)) { set(kDetailOpen, 0.0f); notifyHostParameterChanged(kDetailOpen); }
 
@@ -324,7 +331,36 @@ private:
         if (has(kPrev)) goPage(page_ - 1, size);
         if (has(kNext)) goPage(page_ + 1, size);
         if (has(kSortTap)) { sort_ = (sort_ + 1) % 3; goPage(0, size); }
-        if (has(kTypeTap)) { type_ = (type_ + 1) % kNumTypes; goPage(0, size); }
+        if (has(kTypeTap))                              // (from a maker's page: back to the normal list)
+        {
+            if (!makerOnly_.empty()) makerOnly_.clear();
+            else type_ = (type_ + 1) % kNumTypes;
+            goPage(0, size);
+        }
+        {                                               // a maker's name: everything by that maker
+            std::string mk;
+            if (has(kMakerTap) && getBool(kDetailOpen))
+            {
+                Item it;
+                std::lock_guard<std::mutex> g(listMu_);
+                if (findItem(detailKey_, it)) mk = it.makerName;
+            }
+            for (int c = 0; c < kCards; ++c)
+                if (has(kMakerTap1 + c))
+                {
+                    std::lock_guard<std::mutex> g(listMu_);
+                    size_t i = (size_t)(off + c);
+                    if (i < list_.size()) mk = list_[i].makerName;
+                }
+            if (!mk.empty())
+            {
+                makerOnly_ = mk;
+                set(kDetailOpen, 0.0f);
+                notifyHostParameterChanged(kDetailOpen);
+                goPage(0, size);
+                note("Everything by " + mk + ". TYPE goes back");
+            }
+        }
         if (has(kRefresh)) { manager_->request("refresh", ""); note("Getting the newest plugin list"); }
         if (has(kThemeTap))                              // live: the screen shows the next theme at once
         {
@@ -484,12 +520,17 @@ private:
             bool typeOk = type_ == 0 || (type_ == 1 && e.kind == "instrument") || (type_ == 2 && e.kind == "effect") || (type_ == 3 && e.kind == "addin")
                        || (type_ == 4 && follow_.count(e.maker));
             all.push_back(it);
+            if (!makerOnly_.empty())                     // a maker's page: all of theirs, whatever the tab
+            {
+                if (e.maker == makerOnly_) shown.push_back(it);
+                continue;
+            }
             if (!typeOk) continue;
                 // NEW from a followed maker shows in the main list even before anyone has tested it
             if ((view == 0 && (it.testedHere || it.builtBoth || it.fresh)) || (view == 1 && !it.testedHere && !it.builtBoth) || (view == 2 && it.installed) || (view == 3 && it.update))
                 shown.push_back(it);
         }
-        if (view == 2)                                       // installed folders that are not on the list
+        if (view == 2 && makerOnly_.empty())                 // installed folders that are not on the list
             for (auto& kv : s.installed)
                 if (!matched.count(kv.first))
                 {
@@ -498,14 +539,14 @@ private:
                     it.action = s.current == kv.first ? aWorking : aRemove; it.badge = bInstalled;
                     shown.push_back(it);
                 }
-        if (view == 4)
+        if (view == 4 && makerOnly_.empty())
             for (const std::string& r : s.removed)
             {
                 Item it; it.folder = r; it.name = r.substr(r.find(" - VST - ") == std::string::npos ? 0 : r.find(" - VST - ") + 9);
                 it.maker = "In Removed Plugins"; it.meta = "RESTORE puts it back"; it.action = s.current == r ? aWorking : aRestore;
                 shown.push_back(it);
             }
-        if (view != 4)
+        if (view != 4 || !makerOnly_.empty())
             std::stable_sort(shown.begin(), shown.end(), [this](const Item& a, const Item& b) {
                 if (a.fresh != b.fresh) return a.fresh;                                              // NEW from followed makers first
                 if (a.fresh && b.fresh && a.date != b.date) return a.date > b.date;
@@ -615,7 +656,7 @@ private:
         texts.emplace_back(kStorage, (s.online ? "" : "OFFLINE | ") + drive + free);
         texts.emplace_back(kUpdateCount, updates ? std::to_string(updates) : "");
         texts.emplace_back(kSort, std::string("Sort: ") + kSorts[sort_]);
-        texts.emplace_back(kType, kTypes[type_]);
+        texts.emplace_back(kType, makerOnly_.empty() ? std::string(kTypes[type_]) : ("By " + makerOnly_).substr(0, kMaxText));
         texts.emplace_back(kTheme, std::string("Theme: ") + kThemes[std::max(0, std::min(getInt(kThemePick), kNumThemes - 1))]);
         texts.emplace_back(kPage, "Page " + std::to_string(page_ + 1) + " / " + std::to_string(pageCount((int)shown.size())));
         std::string sum = shown.empty() ? "No plugins here" : std::to_string(off + 1) + "-" + std::to_string(std::min((int)shown.size(), off + kCards))
@@ -737,6 +778,7 @@ private:
     std::string folder_, pin_, confirmKey_, notice_, detailKey_;
     std::map<std::string, int> thumbIndex_;
     std::set<std::string> realPicture_;
+    std::string makerOnly_;                              // 1.5: showing everything by this maker ("" = normal list)
     int port_ = 0, lastView_ = -1, sort_ = 0, type_ = 0, thumbCount_ = 0, thumbHalf_ = 0, page_ = 0, lastOff_ = 0;
     double confirmAt_ = 0, noticeAt_ = 0, lastFullUpdate_ = 0;
     std::mutex textMu_, listMu_;
