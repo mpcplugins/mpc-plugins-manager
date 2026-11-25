@@ -181,7 +181,84 @@ public:
 
     bool gen2 = isGen2Device();
 
+    // ---------------------------------------------------------------- followed makers (1.3)
+    // Shared by the MPC screen and the phone page. Kept on the home drive in "MPC Plugins Manager":
+    // followed.txt (one maker per line) and seen.txt ("plugin id<TAB>version" already seen). Never sent anywhere.
+    struct Follow { std::set<std::string> makers; std::map<std::string, std::string> seen; };
+
+    Follow follows()
+    {
+        std::lock_guard<std::mutex> g(followMu_);
+        loadFollow();
+        return follow_;
+    }
+
+    // Follow (on) or stop following a maker. Following counts everything they have out now as seen, so only what
+    // they release from then on is NEW.
+    void setFollow(const std::string& maker, bool on)
+    {
+        if (maker.empty() || maker.size() > 200 || maker.find('\n') != std::string::npos) return;
+        std::vector<std::pair<std::string, std::string>> theirs;
+        if (on)
+        {
+            std::lock_guard<std::mutex> g(mu_);
+            for (auto& e : state_.plugins) if (e.maker == maker) theirs.emplace_back(e.id, e.version);
+        }
+        std::lock_guard<std::mutex> g(followMu_);
+        loadFollow();
+        if (on) { follow_.makers.insert(maker); for (auto& t : theirs) follow_.seen[t.first] = t.second; }
+        else follow_.makers.erase(maker);
+        saveFollow();
+    }
+
+    // A plugin stops being NEW: opened or installed. By id (its newest version) or with the version.
+    void markSeen(const std::string& id, std::string version = "")
+    {
+        if (id.empty()) return;
+        if (version.empty())
+        {
+            std::lock_guard<std::mutex> g(mu_);
+            for (auto& e : state_.plugins) if (e.id == id) version = e.version;
+        }
+        if (version.empty()) return;
+        std::lock_guard<std::mutex> g(followMu_);
+        loadFollow();
+        auto it = follow_.seen.find(id);
+        if (it != follow_.seen.end() && compareVersions(it->second, version) >= 0) return;
+        follow_.seen[id] = version;
+        saveFollow();
+    }
+
 private:
+    fs::path followPath(const char* name) const { return fs::path(homeDrive_) / kWorkFolder / name; }
+
+    void loadFollow()                                   // (followMu_ held) once
+    {
+        if (followLoaded_ || homeDrive_.empty()) return;
+        followLoaded_ = true;
+        auto lines = [](const std::string& text) {
+            std::vector<std::string> out; size_t s = 0;
+            while (s < text.size()) { size_t e = text.find('\n', s); if (e == std::string::npos) e = text.size();
+                std::string l = text.substr(s, e - s); while (!l.empty() && l.back() == '\r') l.pop_back();
+                if (!l.empty()) out.push_back(l); s = e + 1; }
+            return out; };
+        for (auto& l : lines(readText(followPath("followed.txt")))) follow_.makers.insert(l);
+        for (auto& l : lines(readText(followPath("seen.txt"))))
+        { size_t t = l.find('\t'); if (t != std::string::npos) follow_.seen[l.substr(0, t)] = l.substr(t + 1); }
+    }
+
+    void saveFollow()                                   // (followMu_ held)
+    {
+        std::error_code ec;
+        fs::create_directories(followPath("followed.txt").parent_path(), ec);
+        { std::ofstream f(followPath("followed.txt")); for (auto& m : follow_.makers) f << m << "\n"; }
+        { std::ofstream f(followPath("seen.txt")); for (auto& kv : follow_.seen) f << kv.first << "\t" << kv.second << "\n"; }
+    }
+
+    std::mutex followMu_;
+    Follow follow_;
+    bool followLoaded_ = false;
+
     // ---------------------------------------------------------------- state helpers
     void setStatus(const std::string& s, const std::string& detail = "", int progress = -1)
     {

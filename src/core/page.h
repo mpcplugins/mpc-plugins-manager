@@ -42,6 +42,9 @@ main{padding:12px 16px 40px;max-width:900px;margin:0 auto}
 .note{font-size:12px;opacity:.7}
 .empty{text-align:center;opacity:.6;font-weight:700;padding:30px 0}
 .shot{width:100%;aspect-ratio:2/1;object-fit:cover;border-radius:12px;background:#111;margin-top:8px;display:block}
+.fol{border:1px solid var(--orange);background:#fff;color:var(--orange);border-radius:10px;padding:6px 10px;font-weight:900;font-size:12px;text-transform:uppercase;letter-spacing:.04em;margin-left:6px}
+.fol.on{background:var(--orange);color:#fff}
+.t-new{background:var(--orange)}
 .pick{float:right;width:26px;height:26px;accent-color:var(--orange)}
 .tools{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
 .tools button{border:1px solid #4b362144;background:#fff;color:var(--ink);border-radius:10px;padding:9px 12px;font-weight:900;font-size:12px;text-transform:uppercase}
@@ -72,7 +75,7 @@ a{color:inherit}
   <button data-t="untested" class="red">&#9888; Untested</button>
   <button data-t="removed">Removed</button>
  </div>
- <div class="row"><input id="q" type="search" placeholder="Search plugins, makers, sounds"><select id="kind"><option value="">All types</option><option value="instrument">Instruments</option><option value="effect">Effects</option><option value="addin">Addins</option></select></div>
+ <div class="row"><input id="q" type="search" placeholder="Search plugins, makers, sounds"><select id="kind"><option value="">All types</option><option value="instrument">Instruments</option><option value="effect">Effects</option><option value="addin">Addins</option><option value="followed">&#9733; Followed makers</option></select></div>
  <div class="row"><select id="sort"><option value="dl">Most downloaded</option><option value="new">Newest</option><option value="az">A to Z</option></select><select id="style"><option value="">All sounds</option></select></div>
  <div class="row"><select id="drive"></select></div>
 </header>
@@ -86,6 +89,9 @@ a{color:inherit}
 <script>
 (function(){
 var pin='',tab='tested',state=null,plugins=[],gen='',picking=false,picked={};
+function follows(p){return !!(state&&state.followed&&state.followed.indexOf(p.maker)>=0);}
+// NEW: from a maker you follow, not seen (opened or installed) yet, and not already installed at this version
+function fresh(p){if(!follows(p))return false;var iv=installedVersion(p);if(iv&&!newer(iv.version,p.version))return false;var s=state.seen&&state.seen[p.id];return !s||newer(s,p.version);}
 var SOUND={'drum-machine':'Drum Machine',sampler:'Sampler',sequencer:'Sequencer',synth:'Synth',reverb:'Reverb',delay:'Delay',tape:'Tape & Lo-Fi',saturation:'Saturation & Distortion',dynamics:'Compressor & Dynamics',eq:'EQ & Filter',modulation:'Chorus & Modulation',utility:'Utility'};
 try{pin=localStorage.getItem('mpm_pin')||'';}catch(e){}
 function $(id){return document.getElementById(id);}
@@ -104,10 +110,13 @@ function act(op,arg,confirmText){if(confirmText&&!confirm(confirmText))return;
  api('/api/do?op='+op+'&arg='+encodeURIComponent(arg),true).then(function(j){if(j.answer!=='OK')alert(j.answer);poll(false);}).catch(function(e){alert(e.error||'Could not reach the MPC');});}
 function card(p){
  var c=el('div','card');var iv=installedVersion(p);
+ if(fresh(p))c.appendChild(el('span','strip t-new','\u2605 NEW from '+p.maker));
  var st=testedHere(p)?['t-ok','✓ Tested & working on '+(state&&state.gen==='gen2'?'Gen2':'Gen1')]:builtBoth(p)?['t-un','Tested on '+String(p.tested).replace(/gen/g,'Gen')+', built for your MPC']:p.tier==='verified'?['t-un','Tested on '+String(p.tested).replace(/gen/g,'Gen')+' only, not on your MPC']:p.tier==='experimental'?['t-beta','⚠ Beta / unfinished']:['t-un','Not yet tested'];
  c.appendChild(el('span','strip '+st[0],st[1]));
  c.appendChild(el('div','name',p.name));
- c.appendChild(el('div','meta','by '+p.maker+' · '+(p.kind||'plugin')+' · v'+p.version+(iv?' · installed v'+(iv.version||'?'):'')));
+ var mt=el('div','meta','by '+p.maker+' · '+(p.kind||'plugin')+' · v'+p.version+(iv?' · installed v'+(iv.version||'?'):''));
+ var fb=el('button','fol'+(follows(p)?' on':''),follows(p)?'\u2605 Following':'\u2606 Follow maker');
+ fb.onclick=function(){act(follows(p)?'unfollow':'follow',p.maker,null);};mt.appendChild(fb);c.appendChild(mt);
  if(picking&&p.can&&!iv){var cb=el('input','pick');cb.type='checkbox';cb.checked=!!picked[p.id];cb.onchange=function(){if(cb.checked)picked[p.id]=1;else delete picked[p.id];selbar();};c.insertBefore(cb,c.firstChild);}
  if(p.shot&&/^https:\/\//.test(p.shot)){var im=el('img','shot');im.loading='lazy';im.alt=p.name+' screen';im.src=p.shot;im.onerror=function(){im.remove();};c.appendChild(im);}
  if(p.about)c.appendChild(el('div','about',p.about));
@@ -119,22 +128,22 @@ function card(p){
   var r=el('button','rm','Remove');r.onclick=function(){act('remove',iv.folder,'Remove '+p.name+'? It goes to Removed Plugins, so you can put it back.');};a.appendChild(r);
  }else if(p.can){var b=el('button','','Install');b.onclick=function(){act('install',p.id,risky);};a.appendChild(b);}
  else a.appendChild(el('span','note','This release must be installed with the maker\'s own installer. See its page on thediskking.com.'));
- var more=el('a','note','Details');more.href='https://thediskking.com/plugins/'+p.id+'/';more.target='_blank';more.rel='noopener';a.appendChild(more);
+ var more=el('a','note','Details');more.onclick=function(){if(fresh(p))act('seen',p.id,null);};more.href='https://thediskking.com/plugins/'+p.id+'/';more.target='_blank';more.rel='noopener';a.appendChild(more);
  c.appendChild(a);return c;}
 function render(){
  if(!state)return;var box=$('list');var q=$('q').value.toLowerCase().trim(),k=$('kind').value;var out=[];
  $('warn').style.display=tab==='untested'?'block':'none';
  var sortBy=$('sort').value;
- plugins.sort(function(a,b){return sortBy==='az'?a.name.localeCompare(b.name):sortBy==='new'?String(b.date||'').localeCompare(String(a.date||'')):(b.dl-a.dl);});
+ plugins.sort(function(a,b){var fa=fresh(a),fb=fresh(b);if(fa!==fb)return fa?-1:1;return sortBy==='az'?a.name.localeCompare(b.name):sortBy==='new'?String(b.date||'').localeCompare(String(a.date||'')):(b.dl-a.dl);});
  if(tab==='removed'){
   state.removed.forEach(function(n){if(q&&n.toLowerCase().indexOf(q)<0)return;var c=el('div','card');c.appendChild(el('div','name',n));
    var a=el('div','acts'),b=el('button','up','Restore');b.onclick=function(){act('restore',n,null);};a.appendChild(b);c.appendChild(a);out.push(c);});
  }else{
   plugins.forEach(function(p){
    var iv=installedVersion(p),tested=testedHere(p);
-   var both=builtBoth(p); if(tab==='tested'&&!tested&&!both)return; if(tab==='untested'&&(tested||both))return; if(tab==='installed'&&!iv)return;
+   var both=builtBoth(p),nw=fresh(p); if(tab==='tested'&&!tested&&!both&&!nw)return; if(tab==='untested'&&(tested||both))return; if(tab==='installed'&&!iv)return;
    if(tab==='updates'&&!(iv&&p.can&&newer(iv.version,p.version)))return;
-   if(k&&p.kind!==k)return; var so=$('style').value; if(so&&p.style!==so)return;
+   if(k==='followed'){if(!follows(p))return;}else if(k&&p.kind!==k)return; var so=$('style').value; if(so&&p.style!==so)return;
    if(q&&(p.name+' '+p.maker+' '+(p.about||'')).toLowerCase().indexOf(q)<0)return;
    out.push(card(p));});
  }
@@ -157,7 +166,7 @@ function poll(first){
   $('pinbox').style.display='none';try{localStorage.setItem('mpm_pin',pin);}catch(e){}
   if(s.plugins){plugins=s.plugins;lastGen=s.generated;fillSounds();}
   else if(s.generated!==lastGen){lastGen=null;}
-  state=s;show(s);var inst=JSON.stringify(s.installed)+s.removed.length;
+  state=s;show(s);var inst=JSON.stringify(s.installed)+s.removed.length+JSON.stringify(s.followed||[])+JSON.stringify(s.seen||{});
   if(s.plugins||inst!==lastInst){lastInst=inst;render();}
  }).catch(function(e){if(e&&e.error)showPin(e.error);else{$('st').textContent='Lost contact with the MPC. Is MPC Plugins Manager still on a track?';}});
 }

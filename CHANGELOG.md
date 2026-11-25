@@ -2,6 +2,13 @@
 
 All notable changes to MPC Plugins Manager by The Disk King.
 
+## 1.4.0 (2026-11-25)
+
+- **Follow makers on the phone page too.** Every plugin there has a **Follow maker** button; NEW plugins from the
+  makers you follow come first with an orange **NEW from <maker>** strip, and **Followed makers** in the type list
+  shows everything from them.
+- The MPC screen and the phone page share one list of followed makers: follow on one, it shows on the other.
+
 ## 1.3.0 (2026-11-25)
 
 - **Follow your favorite makers.** Open a plugin's details page and tap **FOLLOW MAKER**. From then on, every new

@@ -173,7 +173,7 @@ private:
         info.name         = "MPC Plugins Manager";
         info.vendor       = "The Disk King";
         info.uniqueId     = MPC_FOURCC('T', 'D', 'K', 'M');   // must match plugin.json "uid": "TDKM"
-        info.version      = 1300;
+        info.version      = 1400;
         info.isInstrument = true;
         info.numInputs    = 0;
         info.numOutputs   = 2;
@@ -217,7 +217,6 @@ private:
         folder_ = mpc::pluginFolder();
         loadThumbs();
         loadTheme();
-        loadFollow();
         manager_ = std::make_unique<tdk::Manager>();
         manager_->start(folder_);
         pin_ = tdk::randomPin();
@@ -285,41 +284,8 @@ private:
         std::ofstream(themeFile()) << kThemes[i] << "\n";
     }
 
-    // ---------------------------------------------------------------- followed makers (kept on the drive, never sent)
-    // followed.txt: one maker per line. seen.txt: "plugin id<TAB>version" for what you have already seen from them.
-    tdk::fs::path followFile(const char* name) const { return themeFile().parent_path() / name; }
-
-    void loadFollow()
-    {
-        follow_.clear(); seen_.clear();
-        auto lines = [](const std::string& text) {
-            std::vector<std::string> out; size_t s = 0;
-            while (s < text.size()) { size_t e = text.find('\n', s); if (e == std::string::npos) e = text.size();
-                std::string l = text.substr(s, e - s); while (!l.empty() && l.back() == '\r') l.pop_back();
-                if (!l.empty()) out.push_back(l); s = e + 1; }
-            return out; };
-        for (auto& l : lines(tdk::readText(followFile("followed.txt")))) follow_.insert(l);
-        for (auto& l : lines(tdk::readText(followFile("seen.txt"))))
-        { size_t t = l.find('\t'); if (t != std::string::npos) seen_[l.substr(0, t)] = l.substr(t + 1); }
-    }
-
-    void saveFollow()
-    {
-        std::error_code ec;
-        tdk::fs::create_directories(themeFile().parent_path(), ec);
-        { std::ofstream f(followFile("followed.txt")); for (auto& m : follow_) f << m << "\n"; }
-        { std::ofstream f(followFile("seen.txt")); for (auto& kv : seen_) f << kv.first << "\t" << kv.second << "\n"; }
-    }
-
-    // Seen: it stops being NEW (opened, installed, or already there when you started following the maker).
-    void markSeen(const std::string& id, const std::string& version)
-    {
-        if (id.empty() || version.empty()) return;
-        auto it = seen_.find(id);
-        if (it != seen_.end() && tdk::compareVersions(it->second, version) >= 0) return;
-        seen_[id] = version;
-        saveFollow();
-    }
+    // (followed makers live in tdk::Manager, shared with the phone page)
+    void markSeen(const std::string& id, const std::string& version) { manager_->markSeen(id, version); }
 
     // Puts a button back to "off" after a press, so every tap is one press (and projects never store a pressed button).
     void release(int index) { setNormalised(index, 0.0f); notifyHostParameterChanged(index); }
@@ -393,16 +359,9 @@ private:
             { std::lock_guard<std::mutex> g(listMu_); found = findItem(detailKey_, it); }
             if (found && !it.makerName.empty())
             {
-                if (follow_.erase(it.makerName)) note("Stopped following " + it.makerName);
-                else
-                {
-                    follow_.insert(it.makerName);
-                    // everything they have out now counts as seen: only what they release from here on is NEW
-                    std::lock_guard<std::mutex> g(listMu_);
-                    for (auto& x : all_) if (x.makerName == it.makerName && !x.id.empty()) seen_[x.id] = x.latest;
-                    note("Following " + it.makerName + ": new ones come first");
-                }
-                saveFollow();
+                bool now = manager_->follows().makers.count(it.makerName) == 0;
+                manager_->setFollow(it.makerName, now);
+                note(now ? "Following " + it.makerName + ": new ones come first" : "Stopped following " + it.makerName);
             }
         }
         if (has(kDetailAction) && getBool(kDetailOpen))
@@ -470,6 +429,9 @@ private:
     void rebuild()
     {
         tdk::Snapshot s = manager_->snapshot();
+        const tdk::Manager::Follow fw = manager_->follows();
+        const auto& follow_ = fw.makers;
+        const auto& seen_ = fw.seen;
         const bool gen2 = manager_->gen2;
         const int view = std::max(0, std::min(getInt(kShow), 4));
         std::vector<Item> all, shown;
@@ -632,7 +594,7 @@ private:
             frame(kDPic + pBadge, found ? it.badge : bBlank, kBadgeFrames);
             frame(kDPic + pChip, found ? it.chip : chNone, kChipFrames);
             frame(kDPic + pLook, found ? it.action : aBlank, kActionFrames);
-            frame(kFavLook, found && follow_.count(it.makerName) ? 1 : 0, 2);
+            frame(kFavLook, found && fw.makers.count(it.makerName) ? 1 : 0, 2);
             if (!found && getBool(kDetailOpen)) { set(kDetailOpen, 0.0f); notifyHostParameterChanged(kDetailOpen); }
         }
         std::string status = manager_->screenStatus();
@@ -780,8 +742,6 @@ private:
     std::mutex textMu_, listMu_;
     std::vector<std::string> text_;
     std::vector<Item> list_, all_;
-    std::set<std::string> follow_;                       // makers you follow (watcher thread only)
-    std::map<std::string, std::string> seen_;            // plugin id -> newest version you have seen from them
 };
 
 MPC_PLUGIN_ENTRY(MPCPluginsManager)

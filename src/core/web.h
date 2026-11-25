@@ -97,6 +97,16 @@ inline std::string stateJson(Manager& m, bool list)
     first = true;
     for (auto& d : s.drives) { o += std::string(first ? "" : ",") + "{\"root\":" + q(d.root) + ",\"label\":" + q(d.label) + ",\"current\":" + (d.current ? "true" : "false") + "}"; first = false; }
     o += "]";
+    {
+        Manager::Follow f = m.follows();             // 1.3: followed makers and what has been seen from them
+        o += ",\"followed\":[";
+        first = true;
+        for (auto& mk : f.makers) { o += (first ? "" : ",") + q(mk); first = false; }
+        o += "],\"seen\":{";
+        first = true;
+        for (auto& kv : f.seen) { o += (first ? "" : ",") + q(kv.first) + ":" + q(kv.second); first = false; }
+        o += "}";
+    }
     if (list)
     {
         o += ",\"plugins\":[";
@@ -220,7 +230,11 @@ private:
         if (path == "/api/state") return send(c, 200, "application/json", stateJson(m_, queryValue(query, "list") == "1"));
         if (path == "/api/do" && method == "POST")
         {
-            std::string answer = m_.request(queryValue(query, "op"), queryValue(query, "arg"));
+            std::string op = queryValue(query, "op"), arg = queryValue(query, "arg");
+            std::string answer;
+            if (op == "follow" || op == "unfollow") { m_.setFollow(arg, op == "follow"); answer = "OK"; }
+            else if (op == "seen") { m_.markSeen(arg); answer = "OK"; }
+            else { if (op == "install") m_.markSeen(arg); answer = m_.request(op, arg); }
             return send(c, 200, "application/json", "{\"answer\":" + q(answer) + "}");
         }
         send(c, 404, "application/json", "{\"error\":\"unknown\"}");
