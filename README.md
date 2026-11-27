@@ -31,6 +31,8 @@ The plugin list is the one at [thediskking.com/plugins](https://thediskking.com/
 
 ## Install
 
+[![Total downloads](https://mpcplugins.github.io/downloads/mpc-plugins-manager.svg)](https://mpcplugins.github.io/p/mpc-plugins-manager/) Gen 1, Gen 2 and works-on-both downloads of every version, added up.
+
 1. Your MPC needs **MPC OS 3.10.1 or later**. Turn on **Menu → Preferences → Enhancements → Enable Enhancements** and **External Plugin Support**, wait a few seconds, then restart.
 2. Click the **DOWNLOAD** button at the top of this page. A file called `MPC-Plugins-Manager-1.5.1-mpc-sdk.zip` lands in your **Downloads** folder (older versions: [Releases](../../releases)).
 3. Unzip it (Windows: right-click the file, then **Extract All**; Mac: double-click it). Connect the MPC to the computer with its USB cable in **Computer Mode** and copy the folder **`The Disk King - VST - MPC Plugins Manager`** into a folder named **`VST2 Plugins`** on the MPC's internal drive or a USB stick. Restart the MPC.
