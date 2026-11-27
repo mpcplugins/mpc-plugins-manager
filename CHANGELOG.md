@@ -2,6 +2,12 @@
 
 All notable changes to MPC Plugins Manager by The Disk King.
 
+## Next version (not released yet)
+
+- **Each MPC gets only its own file.** A works-on-both download carries a 32-bit and a 64-bit program file. A Gen1
+  MPC (Live, Live II, One, X, Key, Force) now installs only the 32-bit file, and a Gen2 MPC (Live III, XL) only the
+  64-bit one. Updates also clear out an old copy of the other file.
+
 ## 1.5.1 (2026-11-25)
 
 - **More from the same maker, right on the plugin's page.** Open a plugin's page and roll your finger up: the page
