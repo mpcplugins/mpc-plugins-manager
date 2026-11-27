@@ -54,11 +54,13 @@ int main(int argc, char** argv)
     setenv("MPC_MANAGER_DRIVE", drive.string().c_str(), 1);
 #endif
     tdk::Manager m;
-    m.gen2 = true;
+    const bool gen1Run = std::getenv("MPC_TEST_GEN1") != nullptr;   // set it to test as a Gen1 (32-bit) MPC
+    m.gen2 = !gen1Run;
+    std::printf("Testing as a %s MPC\n", gen1Run ? "Gen1" : "Gen2");
     m.start((drive / "VST2 Plugins" / "The Disk King - VST - MPC Plugins Manager").string());
     tdk::Snapshot s = waitIdle(m);
     check(s.plugins.size() == (argc > 7 ? 4u : 3u), "saved list loaded: " + std::to_string(s.plugins.size()) + " plugins");
-    if (argc > 7)
+    if (argc > 7 && !gen1Run)   // Boris Granular has only a Gen2 build
     {
         m.request("install", "boris-granular");
         s = waitIdle(m);
@@ -77,16 +79,29 @@ int main(int argc, char** argv)
     m.request("install", "dexed-dx7");
     s = waitIdle(m);
     fs::path acid = drive / "VST2 Plugins" / "sd88me - VST - Acid", dexed = drive / "VST2 Plugins" / "sd88me - VST - Dexed (DX7)";
-    check(fs::exists(acid / "plugin.json"), "Acid installed from inside portable/ (" + s.status + ")");
+    if (gen1Run) check(!fs::exists(acid), "Gen1 MPC: Acid (Gen2-only build) is not installed");
+    else check(fs::exists(acid / "plugin.json"), "Acid installed from inside portable/ (" + s.status + ")");
     check(fs::exists(dexed / "plugin.json"), "Dexed installed from the works-on-both zip");
-    check(s.installed.count("sd88me - VST - Acid") && s.installed["sd88me - VST - Acid"] == "3.0.1", "Acid shows as installed v3.0.1");
+    {
+        std::string j = tdk::readText(dexed / "plugin.json");
+        std::string f32 = tdk::jsonString(j, "file32"), f64 = tdk::jsonString(j, "file64");
+        bool has32 = !f32.empty() && fs::exists(dexed / fs::u8path(f32)), has64 = !f64.empty() && fs::exists(dexed / fs::u8path(f64));
+        if (gen1Run) check(has32 && !has64, "Gen1 MPC: only the 32-bit file installed (" + f32 + ")");
+        else check(has64 && !has32, "Gen2 MPC: only the 64-bit file installed (" + f64 + ")");
+    }
+    if (!gen1Run) check(s.installed.count("sd88me - VST - Acid") && s.installed["sd88me - VST - Acid"] == "3.0.1", "Acid shows as installed v3.0.1");
     check(!fs::exists(drive / "VST2 Plugins" / "sd88me - VST - Acid.installing"), "no half-installed folder left");
     check(fs::is_empty(drive / "MPC Plugins Manager" / "Temp"), "temporary download cleaned up");
 
-    { std::ofstream rom(acid / "My Patterns.bank"); rom << "mine"; }
-    m.request("install", "acid");                       // update over the top
+    // Update over the top (Dexed on Gen1, Acid on Gen2). On Gen1 an old 64-bit file left in the folder must go too.
+    fs::path up = gen1Run ? dexed : acid;
+    std::string stale64 = tdk::jsonString(tdk::readText(dexed / "plugin.json"), "file64");
+    if (gen1Run && !stale64.empty()) { std::ofstream old(dexed / fs::u8path(stale64)); old << "old 64-bit file"; }
+    { std::ofstream rom(up / "My Patterns.bank"); rom << "mine"; }
+    m.request("install", gen1Run ? "dexed-dx7" : "acid");
     s = waitIdle(m);
-    check(fs::exists(acid / "My Patterns.bank"), "update kept the person's own file");
+    check(fs::exists(up / "My Patterns.bank"), "update kept the person's own file");
+    if (gen1Run) check(!fs::exists(dexed / fs::u8path(stale64)), "Gen1 update: an old 64-bit file is not carried over");
     check(s.removed.size() == 1, "old version kept in Removed Plugins: " + (s.removed.empty() ? std::string("none") : s.removed[0]));
 
     m.request("install", "bad");

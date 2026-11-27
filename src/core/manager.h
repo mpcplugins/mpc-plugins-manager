@@ -105,6 +105,18 @@ inline bool writePluginJson(const fs::path& stage, const std::string& folder, co
     return true;
 }
 
+// A works-on-both download carries the 32-bit (Gen1) and the 64-bit (Gen2) program file. Keep only this MPC's
+// own one: Gen1 gets only file32, Gen2 only file64. Nothing is deleted unless this MPC's own file is there.
+inline bool dropOtherBuild(const fs::path& stage, bool gen2)
+{
+    std::string j = readText(stage / "plugin.json");
+    std::string mine = jsonString(j, gen2 ? "file64" : "file32"), other = jsonString(j, gen2 ? "file32" : "file64");
+    if (mine.empty() || other.empty() || mine == other || !safeZipPath(mine) || !safeZipPath(other)) return false;
+    std::error_code ec;
+    if (!fs::is_regular_file(stage / fs::u8path(mine), ec)) return false;
+    return fs::remove(stage / fs::u8path(other), ec);
+}
+
 struct Drive { std::string root, label; bool current = false; };
 
 struct Snapshot   // a consistent copy of the state, for the screen and the phone page
@@ -497,9 +509,11 @@ private:
             replaced = moveToRemoved(target, "replaced");
             if (replaced.empty()) { fs::remove_all(stage, ec); return fail("Update " + e.name, "could not move the old version aside"); }
         }
+        bool trimmed = dropOtherBuild(stage, gen2);     // after the merge, so an old copy of the other file is not kept
         fs::rename(stage, target, ec);
         if (ec) { fs::remove_all(stage, ec); return fail("Install " + e.name, "could not finish copying into VST2 Plugins"); }
-        log((replaced.empty() ? "installed " : "updated ") + e.name + " " + e.version + " (" + folder + ")" + (wrote ? " [plugin.json written by the manager]" : ""));
+        log((replaced.empty() ? "installed " : "updated ") + e.name + " " + e.version + " (" + folder + ")" + (wrote ? " [plugin.json written by the manager]" : "")
+            + (trimmed ? (gen2 ? " [Gen2 file only]" : " [Gen1 file only]") : ""));
         {
             std::lock_guard<std::mutex> g(mu_);
             state_.restartNeeded = true;
